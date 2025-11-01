@@ -1,6 +1,8 @@
+# main.py
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 from passlib.context import CryptContext
 from fastapi.openapi.utils import get_openapi
@@ -13,18 +15,34 @@ import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
+import logging
 
-# -------------------- LOAD CONFIG --------------------
+
 load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key_here")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 1440))
 
-# -------------------- FASTAPI INIT --------------------
+
 app = FastAPI(title="KYC Verification API")
 
-# ✅ Custom Swagger (fix for KeyError)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -36,32 +54,28 @@ def custom_openapi():
         routes=app.routes,
     )
 
-    if "components" not in openapi_schema:
-        openapi_schema["components"] = {}
-
-    if "securitySchemes" not in openapi_schema["components"]:
-        openapi_schema["components"]["securitySchemes"] = {}
-
+    
+    openapi_schema.setdefault("components", {})
+    openapi_schema["components"].setdefault("securitySchemes", {})
     openapi_schema["components"]["securitySchemes"]["bearerAuth"] = {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT"
+        "bearerFormat": "JWT",
     }
-
     openapi_schema["security"] = [{"bearerAuth": []}]
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
 app.openapi = custom_openapi
 
-# -------------------- DATABASE --------------------
-client = MongoClient("mongodb://localhost:27017/")
+
+client = MongoClient(os.getenv("MONGO_URI"))
 db = client["kyc_database"]
 users_collection = db["users"]
 documents_collection = db["uploaded_documents"]
 kyc_data_collection = db["kyc_data"]
 
-# -------------------- SECURITY --------------------
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -80,31 +94,34 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
+    
+    logging.debug("get_current_user token: %s", token)
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
         if not email:
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
-        user = users_collection.find_one({"email": email})
+        
+        user = users_collection.find_one({"email": email.lower()})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
 
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
+    except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-# -------------------- VALIDATORS --------------------
+
 def is_valid_email(email: str) -> bool:
-    return re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email) is not None
+    return re.match(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$", email) is not None
 
 def is_valid_password(password: str) -> bool:
     pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{8,16}$"
     return re.match(pattern, password) is not None
 
-# -------------------- AUTH ROUTES --------------------
+
 @app.post("/signup", tags=["Authentication"])
 def signup(name: str = Form(...), email: str = Form(...), password: str = Form(...)):
     if not is_valid_email(email):
@@ -114,12 +131,13 @@ def signup(name: str = Form(...), email: str = Form(...), password: str = Form(.
             status_code=400,
             detail="Password must be 8–16 chars, include uppercase, lowercase, number, and special char.",
         )
-    if users_collection.find_one({"email": email}):
+    email_lower = email.lower()
+    if users_collection.find_one({"email": email_lower}):
         raise HTTPException(status_code=400, detail="Email already registered")
 
     users_collection.insert_one({
         "name": name,
-        "email": email,
+        "email": email_lower,
         "password": hash_password(password),
         "createdAt": datetime.utcnow()
     })
@@ -127,7 +145,9 @@ def signup(name: str = Form(...), email: str = Form(...), password: str = Form(.
 
 @app.post("/login", tags=["Authentication"])
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = users_collection.find_one({"email": form_data.username})
+    
+    email_lookup = form_data.username.lower() if form_data.username else ""
+    user = users_collection.find_one({"email": email_lookup})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email")
     if not verify_password(form_data.password, user["password"]):
@@ -136,7 +156,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     token = create_access_token({"sub": user["email"]})
     return {"access_token": token, "token_type": "bearer"}
 
-# -------------------- OCR PARSER --------------------
+
 def parse_text(text: str):
     parsed = {
         "panNumber": None,
@@ -173,7 +193,7 @@ def parse_text(text: str):
 
     return parsed
 
-# -------------------- UPLOAD DOC --------------------
+
 @app.post("/upload/", tags=["KYC Operations"])
 async def upload_image(
     file: UploadFile = File(...),
@@ -214,11 +234,12 @@ async def upload_image(
             "createdAt": datetime.utcnow().isoformat(),
         })
 
-        return JSONResponse(content=record)
+        
+        return JSONResponse(content={"message": "File uploaded successfully", "data": record})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# -------------------- FETCH DOCS --------------------
+
 @app.get("/api/get-user-docs", tags=["KYC Operations"])
 async def get_user_docs(current_user: dict = Depends(get_current_user)):
     docs = list(documents_collection.find({"userId": str(current_user["_id"])}))
@@ -229,7 +250,7 @@ async def get_user_docs(current_user: dict = Depends(get_current_user)):
         doc["_id"] = str(doc["_id"])
     return {"user": current_user["email"], "documents": docs}
 
-# -------------------- ROOT --------------------
+
 @app.get("/", tags=["Root"])
 def home():
-    return {"message": "✅ KYC OCR API (Signup + Login + Upload + OCR) running successfully!"}
+    return {"message": " KYC OCR API (Signup + Login + Upload + OCR) running successfully!"}
