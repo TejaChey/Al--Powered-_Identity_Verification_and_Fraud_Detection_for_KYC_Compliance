@@ -1,4 +1,3 @@
-# main.py
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -15,20 +14,18 @@ import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
-import logging
 
-
+# -------------------- LOAD CONFIG --------------------
 load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key_here")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 1440))
 
-
+# -------------------- FASTAPI INIT --------------------
 app = FastAPI(title="KYC Verification API")
 
-
-
+# CORS: allow your frontend origins (adjust if needed)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -42,7 +39,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
+# ✅ Custom Swagger (fix for KeyError)
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -54,28 +51,32 @@ def custom_openapi():
         routes=app.routes,
     )
 
-    
-    openapi_schema.setdefault("components", {})
-    openapi_schema["components"].setdefault("securitySchemes", {})
+    if "components" not in openapi_schema:
+        openapi_schema["components"] = {}
+
+    if "securitySchemes" not in openapi_schema["components"]:
+        openapi_schema["components"]["securitySchemes"] = {}
+
     openapi_schema["components"]["securitySchemes"]["bearerAuth"] = {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT",
+        "bearerFormat": "JWT"
     }
+
     openapi_schema["security"] = [{"bearerAuth": []}]
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
 app.openapi = custom_openapi
 
-
-client = MongoClient(os.getenv("MONGO_URI"))
+# -------------------- DATABASE --------------------
+client = MongoClient("mongodb://localhost:27017/")
 db = client["kyc_database"]
 users_collection = db["users"]
 documents_collection = db["uploaded_documents"]
 kyc_data_collection = db["kyc_data"]
 
-
+# -------------------- SECURITY --------------------
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -94,34 +95,31 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
-    
-    logging.debug("get_current_user token: %s", token)
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
         if not email:
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
-        
-        user = users_collection.find_one({"email": email.lower()})
+        user = users_collection.find_one({"email": email})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
 
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.PyJWTError:
+    except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-
+# -------------------- VALIDATORS --------------------
 def is_valid_email(email: str) -> bool:
-    return re.match(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$", email) is not None
+    return re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email) is not None
 
 def is_valid_password(password: str) -> bool:
     pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{8,16}$"
     return re.match(pattern, password) is not None
 
-
+# -------------------- AUTH ROUTES --------------------
 @app.post("/signup", tags=["Authentication"])
 def signup(name: str = Form(...), email: str = Form(...), password: str = Form(...)):
     if not is_valid_email(email):
@@ -131,13 +129,12 @@ def signup(name: str = Form(...), email: str = Form(...), password: str = Form(.
             status_code=400,
             detail="Password must be 8–16 chars, include uppercase, lowercase, number, and special char.",
         )
-    email_lower = email.lower()
-    if users_collection.find_one({"email": email_lower}):
+    if users_collection.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
 
     users_collection.insert_one({
         "name": name,
-        "email": email_lower,
+        "email": email,
         "password": hash_password(password),
         "createdAt": datetime.utcnow()
     })
@@ -145,9 +142,7 @@ def signup(name: str = Form(...), email: str = Form(...), password: str = Form(.
 
 @app.post("/login", tags=["Authentication"])
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    
-    email_lookup = form_data.username.lower() if form_data.username else ""
-    user = users_collection.find_one({"email": email_lookup})
+    user = users_collection.find_one({"email": form_data.username})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email")
     if not verify_password(form_data.password, user["password"]):
@@ -156,7 +151,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     token = create_access_token({"sub": user["email"]})
     return {"access_token": token, "token_type": "bearer"}
 
-
+# -------------------- OCR PARSER --------------------
 def parse_text(text: str):
     parsed = {
         "panNumber": None,
@@ -168,32 +163,62 @@ def parse_text(text: str):
         "address": None,
     }
 
+    # Clean text
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    full_text = "\n".join(lines)
+    full_text = " ".join(lines)
 
-    aadhaar = re.search(r"\b\d{4}\s\d{4}\s\d{4}\b", full_text)
-    if aadhaar:
-        parsed["aadhaarNumber"] = aadhaar.group().replace(" ", "")
+    # --- Aadhaar detection ---
+    aadhaar_match = re.search(r"\b\d{4}\s?\d{4}\s?\d{4}\b", full_text)
+    if aadhaar_match:
+        parsed["aadhaarNumber"] = aadhaar_match.group().replace(" ", "")
 
-    pan = re.search(r"\b[A-Z]{5}[0-9]{4}[A-Z]\b", full_text)
-    if pan:
-        parsed["panNumber"] = pan.group()
+    # --- PAN detection ---
+    pan_match = re.search(r"\b[A-Z]{5}[0-9]{4}[A-Z]\b", full_text)
+    if pan_match:
+        parsed["panNumber"] = pan_match.group()
 
-    dob = re.search(r"(\d{2,4}[-/]\d{2}[-/]\d{2,4})", full_text)
-    if dob:
-        parsed["dob"] = dob.group(1)
+    # --- DOB detection ---
+    dob_match = re.search(r"\b(\d{2,4}[-/]\d{2}[-/]\d{2,4})\b", full_text)
+    if dob_match:
+        parsed["dob"] = dob_match.group(1)
 
-    gender = re.search(r"(?i)\b(male|female|transgender)\b", full_text)
-    if gender:
-        parsed["gender"] = gender.group(1).capitalize()
+    # --- Gender detection ---
+    gender_match = re.search(r"(?i)\b(male|female|transgender|m|f)\b", full_text)
+    if gender_match:
+        g = gender_match.group(1).lower()
+        parsed["gender"] = "Male" if g in ["m", "male"] else "Female" if g in ["f", "female"] else "Transgender"
 
-    name_match = re.search(r"(?i)\bname[:\-]?\s*([A-Za-z\s]+?)(?=\s*(dob|father|date|gender|address|$))", full_text)
+    # --- Name detection (for both PAN & Aadhaar) ---
+    name_match = re.search(r"(?i)\bname[:\-]?\s*([A-Za-z\s]+)", full_text)
     if name_match:
-        parsed["name"] = name_match.group(1).strip()
+        name = name_match.group(1).strip()
+        # Clean out noise (like DOB, Gender, Address words)
+        name = re.split(r"\b(dob|date|gender|address|s/d|w/o|father)\b", name, flags=re.I)[0].strip()
+        parsed["name"] = name
+
+    # --- Father's name (specific for PAN) ---
+    father_match = re.search(r"(?i)Father'?s Name[:\-]?\s*([A-Za-z\s]+?)(?=\s*(photo|signature|$))", full_text)
+    if father_match:
+        parsed["fatherName"] = father_match.group(1).strip()
+
+    # --- Address detection (specific for Aadhaar) ---
+    addr_match = re.search(r"(?i)address[:\-]?\s*(.+)", full_text)
+    if addr_match:
+        addr = addr_match.group(1).strip()
+        # Stop if Aadhaar number or DOB appears afterward
+        addr = re.split(r"\b(\d{4}\s?\d{4}\s?\d{4}|dob|date|gender)\b", addr, flags=re.I)[0].strip()
+        parsed["address"] = addr
+    else:
+        # Fallback: try to detect line after "Address" keyword
+        for i, line in enumerate(lines):
+            if "address" in line.lower() and i + 1 < len(lines):
+                parsed["address"] = lines[i + 1]
+                break
 
     return parsed
 
 
+# -------------------- UPLOAD DOC --------------------
 @app.post("/upload/", tags=["KYC Operations"])
 async def upload_image(
     file: UploadFile = File(...),
@@ -234,12 +259,12 @@ async def upload_image(
             "createdAt": datetime.utcnow().isoformat(),
         })
 
-        
+        # return consistent shape expected by frontend: { message, data }
         return JSONResponse(content={"message": "File uploaded successfully", "data": record})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
+# -------------------- FETCH DOCS --------------------
 @app.get("/api/get-user-docs", tags=["KYC Operations"])
 async def get_user_docs(current_user: dict = Depends(get_current_user)):
     docs = list(documents_collection.find({"userId": str(current_user["_id"])}))
@@ -250,7 +275,7 @@ async def get_user_docs(current_user: dict = Depends(get_current_user)):
         doc["_id"] = str(doc["_id"])
     return {"user": current_user["email"], "documents": docs}
 
-
+# -------------------- ROOT --------------------
 @app.get("/", tags=["Root"])
 def home():
-    return {"message": " KYC OCR API (Signup + Login + Upload + OCR) running successfully!"}
+    return {"message": "✅ KYC OCR API (Signup + Login + Upload + OCR) running successfully!"}
