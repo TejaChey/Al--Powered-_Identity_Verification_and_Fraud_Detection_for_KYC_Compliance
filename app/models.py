@@ -1,17 +1,10 @@
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from pydantic import BaseModel, EmailStr, Field
 
-class ParsedKYC(BaseModel):
-    panNumber: Optional[str]
-    aadhaarNumber: Optional[str]
-    name: Optional[str]
-    fatherName: Optional[str]
-    dob: Optional[str]
-    gender: Optional[str]
-    address: Optional[str]
+class UserCreate(BaseModel):
+    name: str | None = None
+    email: EmailStr
+    password: str = Field(min_length=6, max_length=128)
 
-class KYCResponse(BaseModel):
-    docType: Optional[str]
-    rawText: str
-    parsed: ParsedKYC
-    processingTimeMs: int
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"

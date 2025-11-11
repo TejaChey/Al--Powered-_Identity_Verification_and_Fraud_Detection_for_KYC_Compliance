@@ -1,10 +1,9 @@
-from motor.motor_asyncio import AsyncIOMotorClient
-from .config import MONGO_URI, DB_NAME
+from pymongo import MongoClient
+from .config import settings
 
-client = AsyncIOMotorClient(MONGO_URI)
-db = client[DB_NAME]
+_client = MongoClient(settings.MONGO_URI)
+_db = _client[settings.MONGO_DB]
 
-# Collections
-users_coll = db.get_collection("users")
-documents_coll = db.get_collection("uploaded_documents")
-kyc_coll = db.get_collection("extracted_kyc")
+users_collection = _db["users"]
+documents_collection = _db["uploaded_documents"]
+kyc_data_collection = _db["kyc_data"]

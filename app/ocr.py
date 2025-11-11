@@ -1,77 +1,61 @@
-import re
-import pytesseract
+import io, re
+from typing import Dict
 from PIL import Image
-from .config import TESSERACT_CMD
-from concurrent.futures import ThreadPoolExecutor
+from .config import settings
 
-if TESSERACT_CMD:
-    pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+try:
+    import pytesseract
+    if settings.TESSERACT_CMD:
+        pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
+except Exception:
+    pytesseract = None  # graceful fallback
 
-_executor = ThreadPoolExecutor(max_workers=2)
+def extract_text_from_bytes(image_bytes: bytes) -> str:
+    img = Image.open(io.BytesIO(image_bytes))
+    if pytesseract is None:
+        return ""
+    try:
+        return pytesseract.image_to_string(img)
+    except Exception:
+        return ""
 
-def run_ocr_sync(path):
-    img = Image.open(path)
-    text = pytesseract.image_to_string(img, lang='eng')
-    return text
-
-async def run_ocr(path):
-    # Run blocking OCR in threadpool
-    loop = __import__("asyncio").get_event_loop()
-    return await loop.run_in_executor(_executor, run_ocr_sync, path)
-
-def parse_kyc(text):
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    joined = " ".join(lines)
-
-    # PAN: pattern 5 letters 4 digits 1 letter
-    pan_match = re.search(r'\b([A-Z]{5}[0-9]{4}[A-Z])\b', joined, re.IGNORECASE)
-    pan = pan_match.group(1).upper() if pan_match else None
-
-    # Aadhaar: 12 digits (allow spaces)
-    aadhaar_match = re.search(r'\b(\d{4}\s?\d{4}\s?\d{4})\b', joined)
-    if aadhaar_match:
-        aadhaar = re.sub(r'\s+', '', aadhaar_match.group(1))
-    else:
-        aadhaar = None
-
-    # DOB: dd/mm/yyyy or yyyy-mm-dd
-    dob_match = re.search(r'\b(\d{2}/\d{2}/\d{4})\b', joined) or re.search(r'\b(\d{4}-\d{2}-\d{2})\b', joined)
-    dob = dob_match.group(1) if dob_match else None
-
-    # Gender
-    gender = None
-    g = re.search(r'\b(Male|Female|MALE|FEMALE|M|F)\b', joined)
-    if g:
-        gender = g.group(1)
-
-    # Name heuristics: look for lines with uppercase names near PAN or at top
-    name = None
-    father_name = None
-    # If PAN present, often name is on line above PAN or prominent in lines
-    if pan:
-        for i, ln in enumerate(lines):
-            if pan in ln.replace(" ", ""):
-                if i > 0:
-                    name = lines[i-1]
-                break
-    if not name and lines:
-        name = lines[0]
-
-    # Address heuristic: capture lines after 'Address' keyword
-    address = None
-    for i, ln in enumerate(lines):
-        if ln.lower().startswith("address") or "address" in ln.lower():
-            address = " ".join(lines[i+1:i+5])
-            break
-
+def parse_text(text: str) -> Dict:
     parsed = {
-        "panNumber": pan,
-        "aadhaarNumber": aadhaar,
-        "name": name,
-        "fatherName": father_name,
-        "dob": dob,
-        "gender": gender,
-        "address": address
+        "panNumber": None,
+        "aadhaarNumber": None,
+        "name": None,
+        "fatherName": None,
+        "dob": None,
+        "gender": None,
+        "address": None,
     }
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    full = " ".join(lines)
+
+    m = re.search(r"\b\d{4}\s?\d{4}\s?\d{4}\b", full)
+    if m: parsed["aadhaarNumber"] = m.group().replace(" ", "")
+    m = re.search(r"\b[A-Z]{5}\d{4}[A-Z]\b", full)
+    if m: parsed["panNumber"] = m.group().upper()
+    m = re.search(r"\b(\d{1,4}[-/]\d{1,2}[-/]\d{1,4})\b", full)
+    if m: parsed["dob"] = m.group(1)
+    m = re.search(r"(?i)\b(male|female|transgender|m|f)\b", full)
+    if m:
+        g = m.group(1).lower()
+        parsed["gender"] = "Male" if g in {"m","male"} else "Female" if g in {"f","female"} else "Transgender"
+
+    m = re.search(r"(?i)\bname[:\-]?\s*([A-Za-z\s]{2,100})", full)
+    if m:
+        nm = m.group(1)
+        nm = re.split(r"\b(dob|date|gender|address|s/d|w/o|father)\b", nm, flags=re.I)[0].strip()
+        parsed["name"] = nm or None
+
+    m = re.search(r"(?i)father('?s)?\s*name[:\-]?\s*([A-Za-z\s]{2,100})", full)
+    if m: parsed["fatherName"] = m.group(2).strip()
+
+    m = re.search(r"(?i)address[:\-]?\s*(.+)", full)
+    if m:
+        addr = m.group(1)
+        addr = re.split(r"\b(\d{4}\s?\d{4}\s?\d{4}|dob|date|gender)\b", addr, flags=re.I)[0].strip()
+        parsed["address"] = addr or None
 
     return parsed
