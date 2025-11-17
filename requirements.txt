@@ -5,3 +5,9 @@ pillow
 pytesseract
 motor
 pydantic
+passlib[bcrypt]
+pyjwt
+rapidfuzz
+numpy
+opencv-python-headless
+python-dotenv

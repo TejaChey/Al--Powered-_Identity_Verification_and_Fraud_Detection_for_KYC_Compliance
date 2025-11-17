@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="C:\Users\nalab\OneDrive\Desktop\projects\kyc_full\kyc\.venv"
+VIRTUAL_ENV="T:\Infosys Internship\Milestone 3\Infosys_Internship6.0_Backend\.venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

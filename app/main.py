@@ -40,6 +40,10 @@ try:
 		return {"message": "✅ KYC OCR + Fraud API up", "milestone": 2}
 
 except Exception as _e:
+	# Print the error for debugging
+	import traceback
+	print("[ERROR] FastAPI app failed to load:", type(_e).__name__, str(_e))
+	traceback.print_exc()
 	# Fallback minimal ASGI app when FastAPI/pydantic can't be imported.
 	# This app ONLY supports POST /auth/signup (application/x-www-form-urlencoded).
 	from .minimal_signup import signup_direct_from_form_bytes
