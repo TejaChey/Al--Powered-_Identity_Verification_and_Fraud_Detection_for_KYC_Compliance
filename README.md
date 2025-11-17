@@ -75,6 +75,13 @@ npm start
 Frontend will run on:
 👉 http://localhost:3000
 
+Environment: Point the frontend to your backend API
+Create a `.env` file in the frontend root with the backend URL, for example:
+
+REACT_APP_API_URL=http://127.0.0.1:8000
+
+This ensures the frontend calls endpoints like `/docs/upload`, `/verify-doc`, and `/fraud-score` on your backend.
+
 💡 Features
 
 ✅ User Signup & Login (JWT Authentication)
@@ -128,10 +135,10 @@ ALGORITHM	JWT encoding algorithm (default: HS256)
 ACCESS_TOKEN_EXPIRE_MINUTES	JWT token expiry time
 🧩 API Endpoints
 Method	Endpoint	Description
-POST	/signup	Register a new user
-POST	/login	Authenticate and get JWT token
-POST	/upload/	Upload Aadhaar or PAN image
-GET	/api/get-user-docs	Fetch uploaded user documents
+POST	/auth/signup	Register a new user (returns access_token)
+POST	/auth/login	Authenticate and get JWT token (returns access_token)
+POST	/docs/upload	Upload Aadhaar or PAN image (authenticated)
+GET	/docs/my-docs	Fetch uploaded user documents (authenticated)
 GET	/	API health check
 	
 🧾 License

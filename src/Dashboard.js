@@ -1,68 +1,157 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { uploadDocument, getUserDocs } from "./api";
+
+// API
+import { getUserDocs, verifyDocument } from "./api";
+
+// Components
+import OCRPreview from "./components/OCRPreview";
+import VerificationCard from "./components/VerificationCard";
+import DashboardCharts from "./components/DashboardCharts";
+import SubmissionsTable from "./components/SubmissionsTable";
+import AdminPanel from "./components/AdminPanel";
+import ScanningLoader from "./components/ScanningLoader";
+
+// Icons
+import { 
+  Upload, 
+  FileText, 
+  Shield, 
+  LogOut, 
+  LayoutDashboard, 
+  User, 
+  ChevronDown, 
+  UserCircle 
+} from "lucide-react";
 
 function Dashboard() {
   const navigate = useNavigate();
+
+  // --- State ---
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [message, setMessage] = useState("");
   const [docs, setDocs] = useState([]);
+  
+  // Results
+  const [previewOcr, setPreviewOcr] = useState(null);
+  const [verificationResult, setVerificationResult] = useState(null);
+  const [submissionsList, setSubmissionsList] = useState([]);
+  
+  // UI State
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("home"); 
+  const [documentType, setDocumentType] = useState(null);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
 
-  //  On load, check token & fetch docs
+  // --- Auth Check ---
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/"); // redirect to login
-    } else {
-      fetchDocuments(token);
-    }
+    if (!token) navigate("/"); 
+    else fetchDocuments(token);
   }, [navigate]);
 
   const fetchDocuments = async (token) => {
     try {
       const data = await getUserDocs(token);
-      setDocs(data.documents || []);
+      const arr = Array.isArray(data) ? data : (data.documents || []);
+      const normalized = arr.map((d) => ({
+        ...d,
+        _id: d._id || d.id,
+        submissionId: d._id,
+        verified: d.decision === "Pass" || (d.fraud && d.fraud.score < 30), 
+        documentType: d.docType || (d.parsed?.aadhaarNumber ? "Aadhaar" : (d.parsed?.panNumber ? "PAN" : "UNKNOWN")),
+      }));
+      setDocs(normalized);
     } catch (err) {
-      setMessage("Failed to fetch documents or not authorized.");
+      console.error(err);
+      setMessage("Failed to fetch documents.");
     }
   };
 
-  //  Handle file input + preview
+  // --- File Handling ---
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       setSelectedFile(file);
       if (file.type.startsWith("image/")) {
-        const url = URL.createObjectURL(file);
-        setPreviewUrl(url);
+        setPreviewUrl(URL.createObjectURL(file));
       } else {
         setPreviewUrl(null);
       }
+      
+      // Reset UI
+      setPreviewOcr(null);
+      setVerificationResult(null);
+      setMessage("");
+
+      // Smart type hint
+      const fileName = file.name.toLowerCase();
+      if (fileName.includes("pan")) setDocumentType("PAN");
+      else if (fileName.includes("aadhaar") || fileName.includes("adhar")) setDocumentType("AADHAAR");
+      else setDocumentType(null);
     }
   };
 
-  // Upload Aadhaar/PAN document
+  function maskAadhaar(a) {
+    if (!a) return a;
+    const s = String(a);
+    return s.length < 4 ? s : `XXXX-XXXX-${s.slice(-4)}`;
+  }
+
+  // --- Main Process ---
   const handleExtractData = async () => {
     const token = localStorage.getItem("token");
-    if (!token) {
-      alert("You are not logged in!");
-      navigate("/");
-      return;
-    }
-
-    if (!selectedFile) {
-      alert("Please select a file first");
-      return;
-    }
+    if (!selectedFile) return;
 
     try {
-      setMessage(" Uploading and extracting data...");
-      await uploadDocument(token, selectedFile);
-      setMessage("Document uploaded successfully!");
+      setLoading(true);
+      setMessage("Analyzing document with AI...");
+
+      const apiResponse = await verifyDocument(token, selectedFile);
+      
+      const { verification, fraud, decision, docId } = apiResponse;
+      const parsed = verification?.parsed || {};
+      
+      let detectedType = "Unknown Document";
+      if (parsed.aadhaarNumber) detectedType = "Aadhaar";
+      else if (parsed.panNumber) detectedType = "PAN";
+      else if (documentType) detectedType = documentType;
+
+      const ocrData = {
+        name: parsed.name || "N/A",
+        aadhaar: parsed.aadhaarNumber || null,
+        pan: parsed.panNumber || null,
+        dob: parsed.dob || "N/A",
+        rawText: verification?.rawText || "",
+        maskedAadhaar: parsed.aadhaarNumber ? maskAadhaar(parsed.aadhaarNumber) : "N/A",
+      };
+      setPreviewOcr(ocrData);
+
+      const resultObj = {
+        submissionId: docId,
+        documentType: detectedType,
+        verified: decision === "Pass",
+        tampered: fraud?.details?.manipulation_suspected || false,
+        maskedAadhaar: ocrData.maskedAadhaar,
+        timestamp: new Date().toISOString(),
+        verification, 
+        fraud: {
+            score: Math.round(fraud?.score || 0),
+            category: fraud?.band 
+        }
+      };
+
+      setVerificationResult(resultObj);
+      setSubmissionsList((prev) => [resultObj, ...prev]);
       fetchDocuments(token);
+      setMessage("Verification complete.");
+
     } catch (err) {
-      setMessage(" Upload failed! Please check your file or token.");
+      console.error("Verification Error:", err);
+      setMessage("Verification failed. Please check the backend.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -72,189 +161,229 @@ function Dashboard() {
   };
 
   return (
-    <div
-      className="min-h-screen relative overflow-hidden"
-      style={{
-        background:
-          "linear-gradient(135deg, #0066cc 0%, #00bfb3 50%, #0099cc 100%)",
-      }}
-    >
-      {/* Decorative elements */}
-      <div
-        className="absolute top-20 left-10 w-32 h-32 rounded-full opacity-20"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%)",
-          filter: "blur(2px)",
-        }}
-      ></div>
-      <div
-        className="absolute top-40 left-32 w-24 h-24 rounded-full opacity-20"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%)",
-          filter: "blur(2px)",
-        }}
-      ></div>
-      <div
-        className="absolute bottom-32 right-20 w-40 h-40 rounded-full opacity-20"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%)",
-          filter: "blur(2px)",
-        }}
-      ></div>
-
-      {/* Aadhaar Logo Section */}
-      <div className="absolute left-10 top-1/2 transform -translate-y-1/2 hidden lg:block">
-        <div className="relative">
-          {/* Magnifying glass circle */}
-          <div className="w-72 h-72 rounded-full border-8 border-gray-300 bg-white bg-opacity-10 backdrop-blur-sm flex items-center justify-center relative">
-            {/* Dotted pattern overlay */}
-            <div className="absolute inset-0 rounded-full overflow-hidden">
-              <div
-                className="w-full h-full"
-                style={{
-                  backgroundImage:
-                    "radial-gradient(circle, rgba(0,0,0,0.4) 1px, transparent 1px)",
-                  backgroundSize: "8px 8px",
-                }}
-              ></div>
-            </div>
-
-            {/* Aadhaar fingerprint icon */}
-            <div className="relative z-10 text-center">
-              <div className="text-6xl mb-2">
-                <svg
-                  viewBox="0 0 24 24"
-                  className="w-32 h-32 mx-auto"
-                  fill="currentColor"
-                >
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-                </svg>
-              </div>
-              <div className="text-2xl font-bold text-gray-800 tracking-wider">
-                AADHAAR
-              </div>
-            </div>
-          </div>
-          {/* Magnifying glass handle */}
-          <div
-            className="absolute bottom-0 right-0 w-16 h-32 bg-gray-700 rounded-full transform rotate-45 origin-top-left"
-            style={{
-              left: "70%",
-              top: "70%",
-            }}
-          ></div>
-          <div
-            className="absolute bottom-0 right-0 w-12 h-24 bg-gray-900 rounded-full transform rotate-45 origin-top-left"
-            style={{
-              left: "72%",
-              top: "72%",
-            }}
-          ></div>
-        </div>
-
-        {/* Decorative arrows */}
-        <div className="absolute -left-20 top-20 space-y-4">
-          <div className="text-red-500 text-3xl">▶</div>
-          <div className="text-red-500 text-3xl">▶</div>
-          <div className="text-red-500 text-3xl">▶</div>
-          <div className="text-red-500 text-3xl">▶</div>
-        </div>
-        <div className="absolute -left-10 top-40 space-y-4">
-          <div className="text-green-400 text-3xl">▶</div>
-          <div className="text-green-400 text-3xl">▶</div>
-          <div className="text-yellow-400 text-3xl">▶</div>
-        </div>
+    <div className="min-h-screen bg-[#f8fafc] text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-700">
+      
+      {/* Background Blobs */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-200/40 rounded-full blur-3xl animate-float"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-indigo-200/40 rounded-full blur-3xl animate-float" style={{animationDelay: '2s'}}></div>
       </div>
 
-      {/* Main Upload Card */}
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md relative z-10">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-gray-800 text-center">
-              Aadhaar KYC Upload
-            </h1>
-            <button
-              onClick={handleLogout}
-              className="text-sm bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition"
-            >
-              Logout
-            </button>
-          </div>
-
-          <div className="space-y-6">
-            {/* File Input */}
-            <div>
-              <input
-                type="file"
-                id="fileInput"
-                onChange={handleFileChange}
-                accept="image/*,.pdf"
-                className="hidden"
-              />
-              <label
-                htmlFor="fileInput"
-                className="inline-block px-4 py-2 bg-gray-200 text-gray-700 rounded cursor-pointer hover:bg-gray-300 transition-colors"
-              >
-                Choose file
-              </label>
-              <span className="ml-3 text-gray-600 text-sm">
-                {selectedFile ? selectedFile.name : "No file chosen"}
-              </span>
+      {/* --- NAVBAR --- */}
+      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-20">
+            
+            {/* Left: Brand */}
+            <div className="flex items-center gap-2">
+              <div className="bg-indigo-600 p-2 rounded-lg shadow-lg shadow-indigo-200">
+                 <Shield className="text-white w-6 h-6" />
+              </div>
+              <div>
+                <span className="block text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 leading-none">
+                  KYC Portal
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Secure Verification</span>
+              </div>
             </div>
 
-            {/* Preview Area */}
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 min-h-[200px] flex items-center justify-center bg-gray-50">
-              {previewUrl ? (
-                <img
-                  src={previewUrl}
-                  alt="Preview"
-                  className="max-w-full max-h-64 object-contain"
-                />
-              ) : (
-                <p className="text-gray-500 text-center">
-                  File preview will appear here.
-                </p>
+            {/* Center: Navigation Tabs */}
+            <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200/50 backdrop-blur-md">
+              {['home', 'submissions', 'admin'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 capitalize flex items-center gap-2 ${
+                    activeTab === tab
+                      ? "bg-white text-indigo-600 shadow-sm ring-1 ring-black/5"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
+                  }`}
+                >
+                  {tab === 'home' && <Upload className="w-4 h-4"/>}
+                  {tab === 'submissions' && <FileText className="w-4 h-4"/>}
+                  {tab === 'admin' && <LayoutDashboard className="w-4 h-4"/>}
+                  <span className="hidden sm:inline">{tab}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Right: Premium Profile Dropdown */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowUserDropdown(!showUserDropdown)}
+                className="flex items-center gap-3 focus:outline-none group pl-4 border-l border-slate-200"
+              >
+                <div className="text-right hidden md:block">
+                  <p className="text-sm font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">User Account</p>
+                  <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Verified Member</p>
+                </div>
+                
+                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 p-[2px] shadow-md hover:shadow-indigo-500/40 transition-all cursor-pointer">
+                  <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
+                    <User className="w-5 h-5 text-indigo-600" />
+                  </div>
+                </div>
+                
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${showUserDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown Menu */}
+              {showUserDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowUserDropdown(false)}></div>
+                  <div className="absolute right-0 top-full mt-3 w-56 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
+                    <div className="p-4 border-b border-slate-50 bg-slate-50/50">
+                      <p className="text-sm font-bold text-slate-800">Signed In</p>
+                      <p className="text-xs text-slate-500 truncate">user@secure-kyc.com</p>
+                    </div>
+                    
+                    <div className="p-2">
+                      <button className="w-full text-left px-3 py-2 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-colors flex items-center gap-2">
+                        <UserCircle className="w-4 h-4" /> My Profile
+                      </button>
+                    </div>
+                    
+                    <div className="p-2 border-t border-slate-50">
+                      <button 
+                        onClick={handleLogout}
+                        className="w-full text-left px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 rounded-lg transition-colors flex items-center gap-2 font-medium"
+                      >
+                        <LogOut className="w-4 h-4" /> Sign Out
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 
-            {/* Upload Button */}
-            <button
-              onClick={handleExtractData}
-              className="w-full py-3 px-6 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Extract Data
-            </button>
-
-            {/* Upload Status */}
-            {message && (
-              <p className="text-center text-gray-700 text-sm">{message}</p>
-            )}
           </div>
         </div>
-      </div>
+      </nav>
 
-      {/* Uploaded Docs Section */}
-      {docs.length > 0 && (
-        <div className="absolute bottom-0 left-0 right-0 bg-white bg-opacity-90 backdrop-blur-sm p-4 shadow-inner">
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
-            Uploaded Documents
-          </h3>
-          <ul className="max-h-40 overflow-y-auto">
-            {docs.map((doc) => (
-              <li
-                key={doc._id}
-                className="flex justify-between text-sm text-gray-700 border-b py-1"
-              >
-                <span>{doc.filename}</span>
-                <span className="text-gray-500">{doc.docType}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* --- MAIN CONTENT --- */}
+      <main className="relative z-10 max-w-7xl mx-auto px-4 py-12">
+        
+        {/* HOME TAB */}
+        {activeTab === "home" && (
+          <div className="flex flex-col lg:flex-row gap-8 items-start">
+            
+            {/* LEFT: Upload Section */}
+            <div className="w-full lg:w-1/3 glass-card p-8 animate-slide-up">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-slate-900">Verify Identity</h2>
+                <p className="text-slate-500 mt-1 text-sm">Upload an official government ID (Aadhaar/PAN) for AI analysis.</p>
+              </div>
+
+              <div className="space-y-6">
+                <div className="group relative">
+                  <input type="file" onChange={handleFileChange} accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" />
+                  
+                  <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center transition-all duration-300 group-hover:border-indigo-400 group-hover:bg-indigo-50/30">
+                    {previewUrl ? (
+                      <div className="relative h-48 w-full overflow-hidden rounded-xl shadow-sm">
+                        <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors"></div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center py-8">
+                        <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                          <Upload className="w-8 h-8" />
+                        </div>
+                        <p className="font-semibold text-slate-700">Click to Upload</p>
+                        <p className="text-xs text-slate-400 mt-1">JPG or PNG (Max 5MB)</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleExtractData}
+                  disabled={loading || !selectedFile}
+                  className="btn-primary w-full flex justify-center items-center gap-2"
+                >
+                   {loading ? "Processing..." : "Verify Document"}
+                </button>
+                
+                {message && (
+                  <p className="text-center text-xs font-medium text-indigo-600 animate-pulse">{message}</p>
+                )}
+              </div>
+            </div>
+
+            {/* RIGHT: Results Section */}
+            <div className="w-full lg:w-2/3 space-y-6">
+              
+              {/* State 1: Loading */}
+              {loading && (
+                 <div className="glass-card p-12 flex justify-center animate-fade-in">
+                    <ScanningLoader />
+                 </div>
+              )}
+
+              {/* State 2: Empty State */}
+              {!loading && !verificationResult && (
+                <div className="h-full min-h-[400px] border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center text-slate-400 bg-white/30">
+                  <Shield className="w-16 h-16 mb-4 opacity-20" />
+                  <p className="font-medium">Results will appear here</p>
+                  <p className="text-sm opacity-60">Upload a document to start analysis</p>
+                </div>
+              )}
+
+              {/* State 3: Results */}
+              {!loading && verificationResult && (
+                <div className="animate-slide-up space-y-6">
+                  {/* 1. Fraud Card */}
+                  <VerificationCard result={verificationResult} fraud={verificationResult.fraud} />
+                  
+                  {/* 2. OCR Details & Charts */}
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <OCRPreview ocr={previewOcr} />
+                    <div className="glass-card p-6">
+                       <h4 className="font-bold text-slate-700 mb-4">Risk Analysis</h4>
+                       <DashboardCharts submissions={[...submissionsList, ...docs]} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SUBMISSIONS TAB */}
+        {activeTab === "submissions" && (
+          <div className="space-y-8 animate-fade-in">
+            <div className="grid md:grid-cols-3 gap-6">
+               <div className="glass-card p-6">
+                  <h3 className="text-slate-500 text-sm font-medium">Total Documents</h3>
+                  <p className="text-3xl font-bold text-slate-900 mt-2">{docs.length}</p>
+               </div>
+               <div className="glass-card p-6">
+                  <h3 className="text-slate-500 text-sm font-medium">Verified Safe</h3>
+                  <p className="text-3xl font-bold text-emerald-600 mt-2">
+                    {docs.filter(d => d.verified).length}
+                  </p>
+               </div>
+               <div className="glass-card p-6">
+                  <h3 className="text-slate-500 text-sm font-medium">Flagged Risk</h3>
+                  <p className="text-3xl font-bold text-rose-600 mt-2">
+                    {docs.filter(d => !d.verified).length}
+                  </p>
+               </div>
+            </div>
+            <SubmissionsTable
+              submissions={[...submissionsList, ...docs]}
+              onRefresh={async (id) => fetchDocuments(localStorage.getItem("token"))}
+            />
+          </div>
+        )}
+
+        {/* ADMIN TAB */}
+        {activeTab === "admin" && (
+          <div className="animate-fade-in">
+            <AdminPanel />
+          </div>
+        )}
+      </main>
     </div>
   );
 }
