@@ -20,24 +20,31 @@ export default function DashboardCharts({ submissions = [] }) {
 
   const riskCounts = { Low: 0, Medium: 0, High: 0 };
   submissions.forEach(s => {
-    // Handle different data structures (backend vs local)
     const score = s.fraud?.score || 0;
     let category = "Low";
     if (score > 70) category = "High";
     else if (score > 30) category = "Medium";
-    
     riskCounts[category] = (riskCounts[category] || 0) + 1;
   });
 
-  // 2. Chart Data Configuration
+  // 2. Theme Colors (Neon)
+  const colors = {
+    emerald: '#10b981',
+    rose: '#f43f5e',
+    amber: '#f59e0b',
+    slate: '#94a3b8',
+    white: '#f8fafc'
+  };
+
+  // 3. Chart Configuration
   const pieData = {
     labels: ["Verified", "Unverified"],
     datasets: [{
       data: [verified, unverified],
-      backgroundColor: ['#10b981', '#f43f5e'], // Emerald-500, Rose-500
-      borderColor: ['#ffffff', '#ffffff'],
-      borderWidth: 2,
-      hoverOffset: 4
+      backgroundColor: [colors.emerald, colors.rose],
+      borderColor: '#0f172a', // Match background color
+      borderWidth: 4,
+      hoverOffset: 10
     }]
   };
 
@@ -46,38 +53,41 @@ export default function DashboardCharts({ submissions = [] }) {
     datasets: [{
       label: "Documents",
       data: [riskCounts.Low, riskCounts.Medium, riskCounts.High],
-      backgroundColor: ['#10b981', '#f59e0b', '#f43f5e'],
-      borderRadius: 6,
-      barThickness: 40, // Fixed width for neater bars
+      backgroundColor: [colors.emerald, colors.amber, colors.rose],
+      borderRadius: 4,
+      barThickness: 30,
     }]
   };
 
-  // 3. Premium Options (No Grid Lines, Better Fonts)
+  // 4. Dark Mode Options
   const commonOptions = {
     responsive: true,
-    maintainAspectRatio: false, // Allows chart to fill the container height
+    maintainAspectRatio: false,
     plugins: {
       legend: {
         position: 'bottom',
         labels: {
+          color: colors.slate, // Light text for legend
           usePointStyle: true,
           padding: 20,
-          font: { family: "'Inter', sans-serif", size: 12 }
+          font: { family: "'Inter', sans-serif", size: 11 }
         }
       },
       tooltip: {
-        backgroundColor: 'rgba(15, 23, 42, 0.9)', // Slate-900
-        padding: 12,
+        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+        titleColor: colors.white,
+        bodyColor: colors.slate,
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1,
+        padding: 10,
         cornerRadius: 8,
-        titleFont: { family: "'Inter', sans-serif", size: 13 },
-        bodyFont: { family: "'Inter', sans-serif", size: 12 }
       }
     }
   };
 
   const pieOptions = {
     ...commonOptions,
-    cutout: '60%', // Makes it a Donut chart (looks more modern)
+    cutout: '70%', // Thinner donut
   };
 
   const barOptions = {
@@ -85,35 +95,38 @@ export default function DashboardCharts({ submissions = [] }) {
     scales: {
       y: {
         beginAtZero: true,
-        grid: { display: false }, // Remove grid lines for clean look
-        ticks: { precision: 0, font: { family: "'Inter', sans-serif" } }
+        grid: { color: 'rgba(255, 255, 255, 0.05)' }, // Faint grid
+        ticks: { color: colors.slate, font: { family: "'Inter', sans-serif" } }
       },
       x: {
         grid: { display: false },
-        ticks: { font: { family: "'Inter', sans-serif" } }
+        ticks: { color: colors.slate, font: { family: "'Inter', sans-serif" } }
       }
     }
   };
 
   return (
-    <div className="grid grid-cols-1 gap-6"> {/* Force 1 Column Stack */}
-      
+    <div className="grid grid-cols-1 gap-6">
       {/* Donut Chart */}
-      <div className="bg-white/50 rounded-2xl p-4 border border-slate-200 flex flex-col items-center justify-center">
-        <h5 className="text-sm font-bold text-slate-600 mb-4 uppercase tracking-wider">Verification Status</h5>
-        <div className="h-64 w-full">
+      <div className="bg-slate-900/50 rounded-xl p-4 border border-white/5 flex flex-col items-center justify-center relative">
+        <h5 className="text-xs font-bold text-slate-400 mb-4 uppercase tracking-wider">Status Ratio</h5>
+        <div className="h-48 w-full relative z-10">
           <Pie data={pieData} options={pieOptions} />
+        </div>
+        {/* Center Text */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pt-6 pointer-events-none">
+           <span className="text-2xl font-bold text-white">{submissions.length}</span>
+           <span className="text-[10px] text-slate-500 uppercase">Total</span>
         </div>
       </div>
 
       {/* Bar Chart */}
-      <div className="bg-white/50 rounded-2xl p-4 border border-slate-200">
-        <h5 className="text-sm font-bold text-slate-600 mb-4 uppercase tracking-wider">Risk Distribution</h5>
-        <div className="h-64 w-full">
+      <div className="bg-slate-900/50 rounded-xl p-4 border border-white/5">
+        <h5 className="text-xs font-bold text-slate-400 mb-4 uppercase tracking-wider">Risk Distribution</h5>
+        <div className="h-48 w-full">
           <Bar data={barData} options={barOptions} />
         </div>
       </div>
-
     </div>
   );
 }

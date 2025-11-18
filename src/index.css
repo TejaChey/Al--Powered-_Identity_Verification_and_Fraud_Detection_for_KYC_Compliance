@@ -4,67 +4,84 @@
 
 @layer base {
   body {
-    @apply bg-[#f8fafc] text-slate-800;
+    @apply bg-[#0f172a] text-slate-100; /* Deep Navy instead of Void Black */
     font-family: 'Inter', sans-serif;
+    overflow-x: hidden;
   }
 }
 
 @layer components {
-  /* Glassmorphism Card */
-  .glass-card {
-    @apply bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl rounded-3xl;
-  }
+  /* --- THEME UTILITIES --- */
   
-  /* Gradient Text */
-  .text-gradient-gold {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-amber-500 via-orange-400 to-amber-500;
+  /* 1. The Main Container (Applied to every page for consistency) */
+  .cyber-container {
+    @apply min-h-screen w-full relative overflow-hidden bg-[#0f172a];
   }
-  
-  /* Premium Button */
-  .btn-primary {
-    @apply bg-slate-900 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-slate-900/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed;
+
+  /* 2. The Luminous Background Effect */
+  .cyber-bg-glow {
+    @apply absolute inset-0 pointer-events-none;
+    background: 
+      radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.15), transparent 25%), /* Sky Blue Glow */
+      radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.15), transparent 25%); /* Violet Glow */
+  }
+
+  /* 3. Moving Grid (Brighter & subtler) */
+  .cyber-grid {
+    @apply absolute inset-0 opacity-20;
+    background-size: 40px 40px;
+    background-image: 
+      linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    mask-image: radial-gradient(circle at center, black 60%, transparent 100%);
+  }
+
+  /* 4. The Glass Card (Used for Login, Upload, Tables) */
+  .glass-panel {
+    @apply bg-white/5 backdrop-blur-2xl border border-white/10 shadow-2xl rounded-2xl;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  }
+
+  /* 5. Cyber Inputs */
+  .input-cyber {
+    @apply w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all duration-300;
+  }
+
+  /* 6. Premium Buttons */
+  .btn-luminous {
+    @apply relative overflow-hidden bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 }
 
 /* --- ANIMATIONS --- */
-
-/* Scanning Laser Effect */
-@keyframes scan {
-  0% { top: 0%; opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { top: 100%; opacity: 0; }
-}
-
-.scanning-line {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  height: 4px;
-  background: linear-gradient(to right, transparent, #6366f1, #ec4899, transparent);
-  box-shadow: 0 0 15px #6366f1;
-  animation: scan 2s ease-in-out infinite;
-}
-
-/* Shimmer / Skeleton Loading */
-@keyframes shimmer {
-  0% { background-position: -1000px 0; }
-  100% { background-position: 1000px 0; }
-}
-
-.shimmer {
-  animation: shimmer 2s infinite linear;
-  background: linear-gradient(to right, #f1f5f9 4%, #e2e8f0 25%, #f1f5f9 36%);
-  background-size: 1000px 100%;
-}
-
-/* Float Animation for Background Blobs */
 @keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-20px); }
-  100% { transform: translateY(0px); }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
 }
 
-.animate-float {
-  animation: float 6s ease-in-out infinite;
+.animate-float { animation: float 5s ease-in-out infinite; }
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
+/* --- TAB TRANSITIONS --- */
+@keyframes tech-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.98) translateY(10px);
+    filter: blur(8px); /* Glass blur effect on entry */
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+.animate-tech-enter {
+  animation: tech-enter 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; /* Smooth ease-out */
+  will-change: transform, opacity, filter;
 }

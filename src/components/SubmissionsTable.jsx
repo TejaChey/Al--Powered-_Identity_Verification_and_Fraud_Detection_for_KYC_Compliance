@@ -1,117 +1,43 @@
-// src/components/SubmissionsTable.jsx
 import React from "react";
 
-/**
- * SubmissionsTable - defensive rendering so missing fields don't crash the UI.
- *
- * Props:
- *  - submissions: array (may contain items from backend docs or mock combined objects)
- *  - onRefresh(submissionId)
- */
 export default function SubmissionsTable({ submissions = [], onRefresh = () => {} }) {
-  if (!Array.isArray(submissions) || submissions.length === 0) {
-    return null;
-  }
+  if (!Array.isArray(submissions) || submissions.length === 0) return null;
 
   const getStatusBadge = (status) => {
-    if (status === "Verified") {
-      return <span className="px-3 py-1 rounded-full bg-indigo-50 text-luxury-gold font-semibold text-xs border border-luxury-gold/30">✓ Verified</span>;
-    }
-    if (status === "Invalid") {
-      return <span className="px-3 py-1 rounded-full bg-rose-50 text-rose-600 font-semibold text-xs border border-rose-200">✗ Invalid</span>;
-    }
-    return (
-      <span className="px-3 py-1 rounded-full bg-surface-muted text-text-secondary font-semibold text-xs border border-surface-stroke">
-        {status}
-      </span>
-    );
-  };
-
-  const getRiskBadge = (category) => {
-    if (category === "Low") {
-      return <span className="px-3 py-1 rounded-full bg-indigo-50 text-luxury-gold font-semibold text-xs border border-luxury-gold/30">Low</span>;
-    }
-    if (category === "Medium") {
-      return <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-500 font-semibold text-xs border border-amber-200">Medium</span>;
-    }
-    if (category === "High") {
-      return <span className="px-3 py-1 rounded-full bg-rose-50 text-rose-600 font-semibold text-xs border border-rose-200">High</span>;
-    }
-    return <span className="text-text-secondary">-</span>;
+    if (status === "Verified") return <span className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold">PASS</span>;
+    if (status === "Invalid") return <span className="px-2 py-1 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold">FAIL</span>;
+    return <span className="px-2 py-1 rounded bg-slate-700 text-slate-300 text-xs">PENDING</span>;
   };
 
   return (
-    <div className="bg-white rounded-2xl card-shadow p-6 animate-slide-up hover-lift border border-surface-stroke">
-      <div className="flex items-center mb-6">
-        <div className="p-2 bg-gradient-to-br from-luxury-gold to-luxury-neon rounded-lg mr-3 shadow">
-          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-        </div>
-        <h3 className="text-2xl font-extrabold font-display tracking-tight text-text-primary">Submissions</h3>
+    <div className="overflow-hidden">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-bold text-white flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> Database Records</h3>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b-2 border-surface-stroke">
-              <th className="pb-4 text-left text-text-secondary font-bold">ID</th>
-              <th className="pb-4 text-left text-text-secondary font-bold">Document</th>
-              <th className="pb-4 text-left text-text-secondary font-bold">Status</th>
-              <th className="pb-4 text-left text-text-secondary font-bold">Fraud Risk</th>
-              <th className="pb-4 text-left text-text-secondary font-bold">Time</th>
-              <th className="pb-4 text-left text-text-secondary font-bold">Actions</th>
+        <table className="w-full text-sm text-left">
+          <thead className="bg-white/5 text-cyan-400 font-mono text-xs uppercase tracking-wider">
+            <tr>
+              <th className="p-4 rounded-tl-lg">ID Hash</th>
+              <th className="p-4">Doc Type</th>
+              <th className="p-4">Status</th>
+              <th className="p-4">Risk %</th>
+              <th className="p-4">Timestamp</th>
+              <th className="p-4 rounded-tr-lg">Action</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-white/5">
             {submissions.map((s, idx) => {
-              // Defensive id handling: use submissionId (mock), fallback to _id (mongo), fallback to index-based id
-              const rawId = s?.submissionId ?? s?._id ?? `unknown-${idx}`;
-              const shortId = typeof rawId === "string" && rawId.length > 8 ? rawId.slice(0, 8) : String(rawId);
-
-              // Document type fallback
-              const docType = s?.documentType ?? s?.docType ?? s?.type ?? "-";
-
-              // Verified status fallback
-              const status = s?.verified === true ? "Verified" : (s?.verified === false ? "Invalid" : (s?.status ?? "-"));
-
-              // Fraud fields (may be missing)
-              const fraudCategory = s?.fraud?.category ?? "-";
-              const fraudScore = typeof s?.fraud?.score === "number" ? `${s.fraud.score}%` : (s?.fraud?.score ?? "-");
-
-              // Time fallback: prefer timestamp -> createdAt -> any date-like field -> show '-' if missing
-              const timeRaw = s?.timestamp ?? s?.createdAt ?? s?.time ?? null;
-              const timeDisplay = timeRaw ? new Date(timeRaw).toLocaleString() : "-";
-
+              const shortId = s?.submissionId?.slice(0, 8) || `DOC-${idx}`;
               return (
-                <tr 
-                  key={rawId + "-" + idx} 
-                  className="border-b border-surface-stroke hover:bg-surface-muted transition-colors duration-200 animate-slide-up"
-                  style={{ animationDelay: `${idx * 0.05}s` }}
-                >
-                  <td className="py-4 font-mono text-xs text-text-secondary font-semibold">{shortId}</td>
-                  <td className="py-4">
-                    <span className="px-3 py-1 bg-surface-muted rounded-lg text-text-primary font-medium text-sm border border-surface-stroke">
-                      {docType}
-                    </span>
-                  </td>
-                  <td className="py-4">{getStatusBadge(status)}</td>
-                  <td className="py-4">
-                    <div className="flex items-center gap-2">
-                      {getRiskBadge(fraudCategory)}
-                      {fraudScore !== "-" && (<span className="text-text-secondary text-xs">({fraudScore})</span>)}
-                    </div>
-                  </td>
-                  <td className="py-4 text-xs text-text-secondary font-medium">{timeDisplay}</td>
-                  <td className="py-4">
-                    <button
-                      onClick={() => {
-                        // Only call onRefresh when we have a usable id
-                        if (rawId && rawId !== `unknown-${idx}`) onRefresh(rawId);
-                      }}
-                      className="px-4 py-2 bg-gradient-to-r from-luxury-gold to-luxury-neon text-white rounded-xl text-xs font-semibold hover:opacity-90 transition-all duration-300 transform hover:scale-105 active:scale-95 shadow"
-                    >
-                      Refresh
-                    </button>
+                <tr key={idx} className="hover:bg-white/5 transition-colors">
+                  <td className="p-4 font-mono text-slate-400">{shortId}</td>
+                  <td className="p-4 text-white font-medium">{s?.documentType || "-"}</td>
+                  <td className="p-4">{getStatusBadge(s?.verified ? "Verified" : "Invalid")}</td>
+                  <td className="p-4 font-mono text-slate-300">{s?.fraud?.score ? s.fraud.score + '%' : '0%'}</td>
+                  <td className="p-4 text-slate-400 text-xs">{new Date(s?.timestamp || Date.now()).toLocaleDateString()}</td>
+                  <td className="p-4">
+                    <button onClick={() => onRefresh(s?.submissionId)} className="text-cyan-400 hover:text-cyan-300 text-xs font-bold uppercase tracking-wider hover:underline">Sync</button>
                   </td>
                 </tr>
               );

@@ -1,36 +1,40 @@
-// src/components/OCRPreview.jsx
 import React from "react";
+import { FileText, ScanLine } from "lucide-react";
 
 export default function OCRPreview({ ocr }) {
   if (!ocr) return null;
   return (
-    <div className="mb-6 bg-white rounded-2xl card-shadow p-6 animate-slide-up hover-lift border border-surface-stroke">
-      <div className="flex items-center mb-4">
-        <div className="p-2 bg-gradient-to-br from-luxury-gold to-luxury-neon rounded-lg mr-3 shadow">
-          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
+    <div className="glass-panel p-6 h-full">
+      <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
+        <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-600/20 border border-purple-400/30">
+          <ScanLine className="w-6 h-6 text-purple-400" />
         </div>
-        <h3 className="text-2xl font-extrabold font-display tracking-tight text-text-primary">OCR Preview</h3>
+        <h3 className="text-xl font-bold text-white tracking-tight">Extracted Data</h3>
       </div>
+
       <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white p-4 rounded-xl border border-surface-stroke">
-            <div className="text-xs font-semibold text-text-secondary mb-1">Name</div>
-            <div className="text-lg font-bold text-text-primary">{ocr.name || "N/A"}</div>
+        <div className="grid grid-cols-1 gap-4">
+          <div className="bg-slate-900/50 p-3 rounded-lg border border-white/5 hover:border-purple-500/30 transition-colors">
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</div>
+            <div className="text-white font-medium">{ocr.name || "N/A"}</div>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-surface-stroke">
-            <div className="text-xs font-semibold text-text-secondary mb-1">Aadhaar</div>
-            <div className="text-lg font-bold text-text-primary font-mono">{ocr.maskedAadhaar || "N/A"}</div>
+          <div className="bg-slate-900/50 p-3 rounded-lg border border-white/5 hover:border-purple-500/30 transition-colors">
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Aadhaar Number</div>
+            <div className="text-cyan-300 font-mono tracking-widest">{ocr.maskedAadhaar || "N/A"}</div>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-surface-stroke">
-            <div className="text-xs font-semibold text-text-secondary mb-1">PAN</div>
-            <div className="text-lg font-bold text-text-primary font-mono">{ocr.pan || "N/A"}</div>
+          <div className="bg-slate-900/50 p-3 rounded-lg border border-white/5 hover:border-purple-500/30 transition-colors">
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">PAN Number</div>
+            <div className="text-cyan-300 font-mono tracking-widest">{ocr.pan || "N/A"}</div>
           </div>
         </div>
+
         <div className="mt-4">
-          <div className="text-xs font-semibold text-text-secondary mb-2">Raw Text</div>
-          <pre className="whitespace-pre-wrap text-xs bg-white text-text-primary p-4 rounded-xl border border-surface-stroke font-mono overflow-x-auto">{ocr.rawText || "No raw text available"}</pre>
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+             <FileText className="w-3 h-3" /> Raw Optical Data
+          </div>
+          <div className="bg-[#020617] text-green-400 p-4 rounded-xl border border-white/10 font-mono text-xs overflow-x-auto shadow-inner h-32">
+             <p className="opacity-80 whitespace-pre-wrap">{ocr.rawText || "// No raw text data stream available..."}</p>
+          </div>
         </div>
       </div>
     </div>

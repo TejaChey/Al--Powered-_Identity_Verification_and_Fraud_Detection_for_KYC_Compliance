@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { login } from "./api"; 
 import { useNavigate, Link } from "react-router-dom";
 import { FaUser, FaLock } from "react-icons/fa";
+import { Fingerprint, ScanFace, CreditCard } from "lucide-react"; // Added Icons
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -12,94 +13,95 @@ function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-
     try {
       const data = await login(email, password);
       localStorage.setItem("token", data.access_token);
       navigate("/dashboard");
     } catch (err) {
-      setError("Invalid email or password");
+      setError("Invalid credentials. Access Denied.");
     }
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-[#f8fafc] relative overflow-hidden">
+    <div className="cyber-container flex items-center justify-center p-4 relative">
+      {/* --- BACKGROUND ELEMENTS --- */}
+      <div className="cyber-grid"></div>
+      <div className="cyber-bg-glow"></div>
       
-      {/* Background Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-50 via-purple-50 to-slate-100 z-0"></div>
+      {/* 1. Giant Fingerprint (Bottom Left) */}
+      <div className="absolute -bottom-20 -left-20 animate-pulse-glow opacity-10">
+         <Fingerprint size={400} className="text-cyan-500 rotate-12" strokeWidth={0.5} />
+      </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white/80 backdrop-blur-xl shadow-2xl rounded-2xl p-10 w-full max-w-md relative z-10 border border-white/50"
-      >
+      {/* 2. Floating ID Card (Top Right) */}
+      <div className="absolute top-20 right-20 animate-float opacity-10">
+         <CreditCard size={150} className="text-purple-500 -rotate-12" strokeWidth={1} />
+      </div>
+
+      {/* 3. Face Scan Icon (Top Left) */}
+      <div className="absolute top-40 left-10 animate-float opacity-5" style={{animationDelay: '2s'}}>
+         <ScanFace size={100} className="text-blue-400" strokeWidth={1} />
+      </div>
+
+      {/* Glass Card */}
+      <form onSubmit={handleSubmit} className="glass-panel w-full max-w-md p-8 relative z-10 animate-float backdrop-blur-3xl border border-white/10">
         <div className="text-center mb-8">
-          <div className="inline-block p-4 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 mb-4 shadow-lg">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          <div className="inline-flex p-4 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/30 mb-4 shadow-[0_0_20px_rgba(6,182,212,0.3)]">
+            <svg className="w-8 h-8 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h2 className="text-3xl font-extrabold text-slate-800 mb-2">
-            Welcome Back
+          <h2 className="text-3xl font-bold text-white tracking-tight">
+            Login
           </h2>
-          <p className="text-slate-500">Sign in to verify your identity</p>
+          <p className="text-slate-400 text-sm mt-2">Authenticate to access KYC Neural Net</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-xl animate-pulse">
-            <p className="text-rose-600 text-center font-medium text-sm">{error}</p>
+          <div className="mb-6 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-center text-sm font-medium">
+            ⚠️ {error}
           </div>
         )}
 
-        <div className="space-y-6">
-          <div className="group">
-            <label className="block mb-2 text-slate-600 font-semibold text-sm">Email Address</label>
-            <div className="flex items-center border border-slate-300 rounded-xl p-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all bg-white/50">
-              <FaUser className="text-slate-400 mr-3" />
-              <input
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="outline-none flex-1 text-slate-800 bg-transparent placeholder-slate-400 text-sm"
-                required
-              />
+        <div className="space-y-5">
+          <div>
+            <label className="block mb-2 text-cyan-100/80 text-xs font-bold uppercase tracking-wider">Email ID</label>
+            <div className="relative">
+               <FaUser className="absolute left-4 top-3.5 text-slate-500" />
+               <input
+                 type="email"
+                 className="input-cyber pl-10"
+                 placeholder="Enter your email"
+                 value={email}
+                 onChange={(e) => setEmail(e.target.value)}
+                 required
+               />
             </div>
           </div>
 
-          <div className="group">
-            <label className="block mb-2 text-slate-600 font-semibold text-sm">Password</label>
-            <div className="flex items-center border border-slate-300 rounded-xl p-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all bg-white/50">
-              <FaLock className="text-slate-400 mr-3" />
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="outline-none flex-1 text-slate-800 bg-transparent placeholder-slate-400 text-sm"
-                required
-              />
+          <div>
+            <label className="block mb-2 text-cyan-100/80 text-xs font-bold uppercase tracking-wider">Password Key</label>
+            <div className="relative">
+               <FaLock className="absolute left-4 top-3.5 text-slate-500" />
+               <input
+                 type="password"
+                 className="input-cyber pl-10"
+                 placeholder="••••••••"
+                 value={password}
+                 onChange={(e) => setPassword(e.target.value)}
+                 required
+               />
             </div>
           </div>
 
-          {/* --- FIXED BUTTON --- */}
-          {/* We explicitly use 'bg-gradient-to-r' here to ensure it appears */}
-          <button
-            type="submit"
-            className="w-full py-4 rounded-xl font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
-          >
-            Sign In
+          <button type="submit" className="btn-luminous w-full">
+            Login Session
           </button>
         </div>
 
-        <p className="text-center mt-8 text-sm text-slate-500">
-          Don't have an account?{" "}
-          <Link 
-            to="/signup" 
-            className="text-indigo-600 font-bold hover:text-indigo-700 hover:underline transition-colors"
-          >
-            Create Account
-          </Link>
-        </p>
+        <div className="mt-8 text-center border-t border-white/5 pt-6">
+           <p className="text-slate-400 text-sm">New Personnel? <Link to="/signup" className="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors">Register ID</Link></p>
+        </div>
       </form>
     </div>
   );
