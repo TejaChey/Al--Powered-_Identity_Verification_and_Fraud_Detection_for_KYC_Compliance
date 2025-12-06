@@ -1,6 +1,6 @@
 import io, re
 import numpy as np
-from typing import Dict
+from typing import Dict, List
 from PIL import Image
 from .config import settings
 
@@ -16,6 +16,11 @@ try:
     import cv2
 except Exception:
     cv2 = None
+
+try:
+    from pdf2image import convert_from_bytes
+except Exception:
+    convert_from_bytes = None
 
 def preprocess_image(image_bytes: bytes):
     """
@@ -44,16 +49,44 @@ def preprocess_image(image_bytes: bytes):
     # Convert back to PIL Image for Tesseract
     return Image.fromarray(processed)
 
+def _pdf_bytes_to_images(pdf_bytes: bytes) -> List[Image.Image]:
+    if convert_from_bytes is None:
+        return []
+    try:
+        return convert_from_bytes(pdf_bytes, fmt="png")
+    except Exception as e:
+        print(f"PDF convert error: {e}")
+        return []
+
 def extract_text_from_bytes(image_bytes: bytes) -> str:
     if pytesseract is None:
         return ""
     try:
-        # Use the new pre-processing function
-        img = preprocess_image(image_bytes)
-        
-        # Config: psm 6 assumes a single uniform block of text
+        # detect PDF
+        is_pdf = image_bytes[:4] == b"%PDF"
+        pages: List[Image.Image] = []
+        if is_pdf:
+            pages = _pdf_bytes_to_images(image_bytes)
+            if not pages:
+                return ""
+        else:
+            pages = [preprocess_image(image_bytes)]
+
+        texts = []
         custom_config = r'--oem 3 --psm 6'
-        return pytesseract.image_to_string(img, config=custom_config)
+        for img in pages:
+            try:
+                texts.append(pytesseract.image_to_string(img, config=custom_config))
+            except Exception as e:
+                print(f"OCR page error: {e}")
+        if texts:
+            return "\n".join(texts)
+
+        # retry once with raw bytes if preprocessing failed
+        if not is_pdf:
+            img = Image.open(io.BytesIO(image_bytes))
+            return pytesseract.image_to_string(img, config=custom_config)
+        return ""
     except Exception as e:
         print(f"OCR Error: {e}")
         return ""
@@ -67,6 +100,9 @@ def parse_text(text: str) -> Dict:
         "dob": None,
         "gender": None,
         "address": None,
+        "dlNumber": None,
+        "issueDate": None,
+        "validUntil": None,
     }
     
     # Filter out empty lines and very short noise
@@ -134,4 +170,23 @@ def parse_text(text: str) -> Dict:
         addr = re.sub(r"\d{4}\s?\d{4}\s?\d{4}", "", addr).strip()
         parsed["address"] = addr
 
+    # Extract Driver's License Number
+    m = re.search(r"(?i)(dl|license|licence)\s*(?:no|number|#)?[\s:\-]*([A-Z]{2}[\d\-]{11,15})", full)
+    if m:
+        parsed["dlNumber"] = m.group(2).strip()
+    else:
+        # Alternative pattern: standalone 13-16 char DL format
+        m = re.search(r"\b([A-Z]{2}\d{2}\s?\d{11})\b", full)
+        if m:
+            parsed["dlNumber"] = m.group(1).replace(" ", "")
+    
+    # Extract Issue Date / Valid Until
+    m = re.search(r"(?i)(issue|issued|iss)[\s:\-]*(\d{1,2}[-/]\d{1,2}[-/]\d{4})", full)
+    if m:
+        parsed["issueDate"] = m.group(2)
+    
+    m = re.search(r"(?i)(valid|validity|exp|expiry)[\s:\-]*(\d{1,2}[-/]\d{1,2}[-/]\d{4})", full)
+    if m:
+        parsed["validUntil"] = m.group(2)
+    
     return parsed

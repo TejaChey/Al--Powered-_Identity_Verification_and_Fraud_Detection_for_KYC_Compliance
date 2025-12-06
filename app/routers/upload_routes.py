@@ -4,9 +4,9 @@ from ..security import get_current_user
 from ..upload import process_upload
 from ..db import documents_collection
 
-router = APIRouter(prefix="/docs", tags=["upload"])
+router = APIRouter(prefix="/upload", tags=["upload"])  # Changed from /docs to /upload
 
-@router.post("/upload")
+@router.post("/file")  # Now accessible at /upload/file
 async def upload_file(file: UploadFile = File(...), current_user = Depends(get_current_user)):
 	try:
 		content = await file.read()
