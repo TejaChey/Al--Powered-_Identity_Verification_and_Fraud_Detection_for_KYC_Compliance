@@ -87,3 +87,6 @@ POST	/auth/login	Authenticate user & get Token
 POST	/upload/files	Upload multiple documents (AI Scan)
 GET	/compliance/docs	Fetch user submissions
 GET	/admin/stats	Get system-wide fraud stats
+
+👨‍💻 Contributors
+Y Teja- Lead Developer
