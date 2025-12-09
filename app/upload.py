@@ -5,6 +5,6 @@ from .db import documents_collection
 from .verification import verify_document
 from .compliance import run_full_pipeline
 
-def process_upload(user: dict, filename: str, file_bytes: bytes):
+def process_upload(user: dict, filename: str, file_bytes: bytes, device_info: dict = None):
     # Delegate everything to the full pipeline in compliance.py for consistency
-    return run_full_pipeline(user, filename, file_bytes)
+    return run_full_pipeline(user, filename, file_bytes, device_info=device_info)

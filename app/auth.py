@@ -20,11 +20,14 @@ def signup_user(user_in: UserCreate):
     # Decode ONLY for our hash_password function (ignore invalid UTF-8 after truncation)
     pw_safe = pw_bytes.decode("utf-8", errors="ignore")
 
-    # 3. Insert clean user object
+    # 3. Insert clean user object with all profile fields
     user_doc = {
-        "name": user_in.name.strip(),
+        "name": (user_in.name or "").strip(),
         "email": user_in.email.lower().strip(),
         "password": hash_password(pw_safe),             # hash it
+        "dob": user_in.dob.strip() if user_in.dob else None,  # Date of Birth
+        "gender": user_in.gender.strip() if user_in.gender else None,  # Gender
+        "role": user_in.role or "user",  # User role: "user" or "admin"
         "createdAt": datetime.utcnow(),
     }
 

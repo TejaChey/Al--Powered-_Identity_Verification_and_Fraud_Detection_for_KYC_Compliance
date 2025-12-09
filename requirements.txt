@@ -3,6 +3,7 @@ uvicorn[standard]
 python-multipart
 pillow
 pytesseract
+easyocr
 motor
 pydantic
 passlib[bcrypt]
@@ -11,3 +12,9 @@ rapidfuzz
 numpy
 opencv-python-headless
 python-dotenv
+reportlab
+pymupdf
+tensorflow
+torch
+torchvision
+torch_geometric

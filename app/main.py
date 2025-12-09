@@ -1,49 +1,69 @@
+# app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+
+# This imports the list `routers` from app/routers/__init__.py
 from .routers import routers
 
-# Initialize the App
 app = FastAPI(title="KYC Verification API", version="1.0.0")
 
-# 1. CORS Middleware
+# ----------------------
+# CORS CONFIG
+# ----------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173", "*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "*",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 2. Custom OpenAPI (for JWT Auth support in Swagger UI)
+# ----------------------
+# OPENAPI JWT SUPPORT
+# ----------------------
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
+
     schema = get_openapi(
         title=app.title,
         version=app.version,
-        description="Backend for AI-Powered Identity Verification and Fraud Detection",
+        description="Backend for AI-Powered KYC Verification & Fraud Detection",
         routes=app.routes,
     )
-    # Add Bearer Auth scheme
+
     schema.setdefault("components", {}).setdefault("securitySchemes", {})["bearerAuth"] = {
-        "type": "http", "scheme": "bearer", "bearerFormat": "JWT"
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
     }
+
     schema["security"] = [{"bearerAuth": []}]
     app.openapi_schema = schema
-    return app.openapi_schema
+    return schema
 
 app.openapi = custom_openapi
 
-# 3. Include Routers
-# This assumes 'app/routers/__init__.py' exports a list named 'routers'
-for r in routers:
-    app.include_router(r)
+# ----------------------
+# INCLUDE ALL ROUTERS
+# ----------------------
+for router in routers:
+    app.include_router(router)
 
-# 4. Root Endpoint
+# ----------------------
+# ROOT ENDPOINT
+# ----------------------
 @app.get("/")
 def root():
-    return {"message": "✅ KYC OCR + Fraud API up", "milestone": 2}
+    return {"message": "✅ Backend Running", "milestone": 2}
+
 
 if __name__ == "__main__":
     import uvicorn

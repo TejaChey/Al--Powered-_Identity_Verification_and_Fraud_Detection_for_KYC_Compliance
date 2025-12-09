@@ -212,9 +212,29 @@ def heuristic_refine_parsing(parsed: Dict[str, Any], raw_text: str) -> Dict[str,
 
 def verify_document(image_bytes: bytes) -> Dict[str, Any]:
     text = extract_text_from_bytes(image_bytes)
+    
+    # Debug: Print OCR text length and sample
+    print(f"\n🔎 verify_document: OCR returned {len(text)} chars")
+    if text:
+        print(f"📋 First 300 chars:\n{text[:300]}")
+    else:
+        print("⚠️ No text extracted from image!")
+    
     parsed = parse_text(text)
     
+    # Debug: Print what was parsed
+    print(f"\n📊 Parsed result:")
+    for k, v in parsed.items():
+        if v:
+            print(f"   ✓ {k}: {v}")
+    
     parsed = heuristic_refine_parsing(parsed, text)
+    
+    # Debug: Print after heuristic refinement
+    print(f"\n📊 After heuristic refinement:")
+    for k, v in parsed.items():
+        if v:
+            print(f"   ✓ {k}: {v}")
 
     res: Dict[str, Any] = {
         "rawText": text,
