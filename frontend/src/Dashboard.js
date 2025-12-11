@@ -14,7 +14,7 @@ import BulkUpload from "./components/BulkUpload";
 import { runClientOCR } from "./services/clientOCR";
 
 
-import { Upload, Activity, Fingerprint, CreditCard, Search, BarChart3, FileSpreadsheet, Eye, AlertCircle } from "lucide-react";
+import { Upload, Activity, Fingerprint, CreditCard, Search, BarChart3, FileSpreadsheet, Eye, AlertCircle, Shield, User, LogOut, ShieldOff } from "lucide-react";
 
 /**
  * Dashboard (full file)
@@ -557,7 +557,7 @@ function Dashboard() {
             {userRole === "admin" && (
               <>
                 <button onClick={() => setActiveTab("monitoring")} className={`px-4 py-2 rounded-lg text-xs uppercase tracking-wider transition-all ${activeTab === "monitoring" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 scale-105" : "text-slate-400 hover:text-white hover:bg-white/10"}`}><BarChart3 className="w-4 h-4 inline-block mr-1" />Monitor</button>
-                <button onClick={() => setActiveTab("admin")} className={`px-4 py-2 rounded-lg text-xs uppercase tracking-wider transition-all ${activeTab === "admin" ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 scale-105" : "text-slate-400 hover:text-white hover:bg-white/10"}`}>🛡️ Admin</button>
+                <button onClick={() => setActiveTab("admin")} className={`px-4 py-2 rounded-lg text-xs uppercase tracking-wider transition-all flex items-center gap-1 ${activeTab === "admin" ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 scale-105" : "text-slate-400 hover:text-white hover:bg-white/10"}`}><Shield className="w-4 h-4" /> Admin</button>
               </>
             )}
           </div>
@@ -566,8 +566,8 @@ function Dashboard() {
             <button onClick={() => setShowUserDropdown((v) => !v)} className="flex items-center gap-2 border-l border-white/10 pl-4">
               <div className="hidden md:block text-right">
                 <p className="text-sm text-white font-bold">{userName || "User"}</p>
-                <p className={`text-[10px] font-mono font-bold ${userRole === "admin" ? "text-purple-400" : "text-cyan-400"}`}>
-                  {userRole === "admin" ? "🛡️ Admin" : "👤 User"}
+                <p className={`text-[10px] font-mono font-bold flex items-center gap-1 ${userRole === "admin" ? "text-purple-400" : "text-cyan-400"}`}>
+                  {userRole === "admin" ? <><Shield className="w-3 h-3" /> Admin</> : <><User className="w-3 h-3" /> User</>}
                 </p>
               </div>
               {/* Avatar with initials */}
@@ -598,14 +598,14 @@ function Dashboard() {
                           ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
                           : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
                           }`}>
-                          {userRole === "admin" ? "🛡️ Administrator" : "👤 User"}
+                          {userRole === "admin" ? <><Shield className="w-3 h-3 inline" /> Administrator</> : <><User className="w-3 h-3 inline" /> User</>}
                         </span>
                       </div>
                     </div>
                   </div>
 
                   <button onClick={logout} className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-rose-500/10 flex items-center gap-2">
-                    <span>🚪</span> Log Out
+                    <LogOut className="w-4 h-4" /> Log Out
                   </button>
                 </div>
               </>
@@ -848,15 +848,10 @@ function Dashboard() {
         {activeTab === "admin" && (
           <div className="animate-tech-enter space-y-6">
             {userRole === "admin" ? (
-              <>
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  <span className="text-2xl">🛡️</span> Admin Control Panel
-                </h2>
-                <div className="glass-panel p-6"><AdminPanel /></div>
-              </>
+              <div className="glass-panel p-6"><AdminPanel /></div>
             ) : (
               <div className="glass-panel p-8 text-center">
-                <div className="text-6xl mb-4">🚫</div>
+                <ShieldOff className="w-16 h-16 mx-auto mb-4 text-rose-400" />
                 <h3 className="text-xl font-bold text-rose-400 mb-2">Access Denied</h3>
                 <p className="text-slate-400">The Admin Panel is restricted to administrators only.</p>
                 <p className="text-xs text-slate-500 mt-2">Your current role: <span className="text-cyan-400">{userRole || "user"}</span></p>

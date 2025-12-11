@@ -1,146 +1,165 @@
 import React, { useState } from "react";
 import { login } from "./api";
 import { useNavigate, Link } from "react-router-dom";
-import { FaUser, FaLock } from "react-icons/fa";
-import { Fingerprint, ScanFace, CreditCard } from "lucide-react"; // Added Icons
+import { Mail, Lock, Eye, EyeOff, Shield, ArrowRight, Fingerprint, CreditCard, ScanFace } from "lucide-react";
 
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
     try {
       const data = await login(email, password);
       localStorage.setItem("token", data.access_token);
       navigate("/dashboard");
     } catch (err) {
       setError("Invalid credentials. Access Denied.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="cyber-container flex items-center justify-center p-4 relative">
-      {/* --- BACKGROUND ELEMENTS --- */}
-      <div className="cyber-grid"></div>
-      <div className="cyber-bg-glow"></div>
-
-      {/* 1. Giant Fingerprint (Bottom Left) */}
-      <div className="absolute -bottom-20 -left-20 animate-pulse-glow opacity-10">
-        <Fingerprint size={400} className="text-cyan-500 rotate-12" strokeWidth={0.5} />
-      </div>
-
-      {/* 2. Floating ID Card (Top Right) */}
-      <div className="absolute top-20 right-20 animate-float opacity-10">
-        <CreditCard size={150} className="text-purple-500 -rotate-12" strokeWidth={1} />
-      </div>
-
-      {/* 3. Face Scan Icon (Top Left) */}
-      <div className="absolute top-40 left-10 animate-float opacity-5" style={{ animationDelay: '2s' }}>
-        <ScanFace size={100} className="text-blue-400" strokeWidth={1} />
-      </div>
-
-      {/* 4. Animated Background Text Layers */}
-
-      {/* Layer 1: Top (Fast) */}
-      <div className="absolute top-20 left-0 w-full overflow-hidden opacity-5 pointer-events-none select-none">
-        <div className="flex whitespace-nowrap animate-marquee">
-          <span className="text-[80px] font-black uppercase text-cyan-500 mr-20">
-            REAL-TIME OCR PROCESSING • AADHAAR & PAN VERIFICATION • INSTANT FRAUD ALERTS •
-          </span>
-          <span className="text-[80px] font-black uppercase text-cyan-500 mr-20">
-            REAL-TIME OCR PROCESSING • AADHAAR & PAN VERIFICATION • INSTANT FRAUD ALERTS •
-          </span>
+    <div className="h-screen w-full flex relative overflow-hidden">
+      {/* ===== MOBILE BACKGROUND ===== */}
+      <div className="lg:hidden absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950">
+        <div className="absolute inset-0 opacity-20" style={{
+          backgroundSize: '40px 40px',
+          backgroundImage: 'linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)'
+        }}></div>
+        <div className="absolute top-0 left-1/4 w-48 h-48 bg-cyan-500/20 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/4 right-0 w-40 h-40 bg-blue-500/15 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-10 -left-10 opacity-10 animate-pulse">
+          <Fingerprint size={150} className="text-cyan-500 rotate-12" strokeWidth={0.5} />
+        </div>
+        <div className="absolute top-16 right-8 opacity-10 animate-bounce" style={{ animationDuration: '3s' }}>
+          <CreditCard size={50} className="text-purple-500 -rotate-12" strokeWidth={1} />
         </div>
       </div>
 
-      {/* Layer 2: Middle (Main, Reversed) */}
-      <div className="absolute top-1/2 left-0 w-full overflow-hidden -translate-y-1/2 opacity-10 pointer-events-none select-none">
-        <div className="flex whitespace-nowrap animate-marquee-reverse">
-          <span className="text-[120px] font-black uppercase text-cyan-500 mr-20">
-            KYC VERIFICATION SYSTEM • FRAUD DETECTION ONLINE • SECURE NEURAL NETWORK • BIOMETRIC ANALYSIS •
-          </span>
-          <span className="text-[120px] font-black uppercase text-cyan-500 mr-20">
-            KYC VERIFICATION SYSTEM • FRAUD DETECTION ONLINE • SECURE NEURAL NETWORK • BIOMETRIC ANALYSIS •
-          </span>
-        </div>
-      </div>
+      {/* ===== LEFT SIDE - Form Panel ===== */}
+      <div className="w-full lg:w-[45%] h-full relative flex items-center justify-center p-4 sm:p-6 lg:p-8 z-10">
+        <div className="hidden lg:block absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950"></div>
+        <div className="hidden lg:block absolute top-0 left-0 w-72 h-72 bg-cyan-500/10 rounded-full blur-3xl"></div>
+        <div className="hidden lg:block absolute bottom-0 right-0 w-60 h-60 bg-blue-500/10 rounded-full blur-3xl"></div>
+        <div className="hidden lg:block absolute inset-0 backdrop-blur-[1px] bg-slate-900/30"></div>
 
-      {/* Layer 3: Bottom (Slow, Detailed) */}
-      <div className="absolute bottom-20 left-0 w-full overflow-hidden opacity-5 pointer-events-none select-none">
-        <div className="flex whitespace-nowrap animate-marquee">
-          <span className="text-[60px] font-bold uppercase text-blue-500 mr-20">
-            CROSS-MATCHING ALGORITHMS • BIOMETRIC LIVENESS CHECK • AES-256 ENCRYPTION • ISO-27001 COMPLIANT •
-          </span>
-          <span className="text-[60px] font-bold uppercase text-blue-500 mr-20">
-            CROSS-MATCHING ALGORITHMS • BIOMETRIC LIVENESS CHECK • AES-256 ENCRYPTION • ISO-27001 COMPLIANT •
-          </span>
-        </div>
-      </div>
+        {/* Form Container */}
+        <div className="relative z-10 w-full max-w-sm">
+          <div className="lg:bg-transparent bg-white/5 backdrop-blur-2xl lg:backdrop-blur-none rounded-2xl lg:rounded-none p-5 sm:p-6 lg:p-0 border border-white/10 lg:border-0">
+            {/* Logo/Brand */}
+            <div className="mb-5 lg:mb-6">
+              <div className="flex items-center gap-2 mb-4 lg:mb-5">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30">
+                  <Shield className="w-5 h-5 text-cyan-400" />
+                </div>
+                <span className="text-lg font-bold text-white tracking-tight">KYC<span className="text-cyan-400">.AI</span></span>
+              </div>
 
-      {/* Glass Card */}
-      <form onSubmit={handleSubmit} className="glass-panel w-full max-w-md p-8 relative z-10 animate-float backdrop-blur-3xl border border-white/10">
-        <div className="text-center mb-8">
-          <div className="inline-flex p-4 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-400/30 mb-4 shadow-[0_0_20px_rgba(6,182,212,0.3)]">
-            <svg className="w-8 h-8 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-          </div>
-          <h2 className="text-3xl font-bold text-white tracking-tight">
-            Login
-          </h2>
-          <p className="text-slate-400 text-sm mt-2">Authenticate to access KYC Neural Net</p>
-        </div>
-
-        {error && (
-          <div className="mb-6 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-center text-sm font-medium">
-            ⚠️ {error}
-          </div>
-        )}
-
-        <div className="space-y-5">
-          <div>
-            <label className="block mb-2 text-cyan-100/80 text-xs font-bold uppercase tracking-wider">Email ID</label>
-            <div className="relative">
-              <FaUser className="absolute left-4 top-3.5 text-slate-500" />
-              <input
-                type="email"
-                className="input-cyber pl-10"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-1.5 tracking-tight">
+                Sign in
+              </h1>
+              <p className="text-slate-400 text-sm">
+                Don't have an account? <Link to="/signup" className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 font-medium transition-colors">Create now</Link>
+              </p>
             </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="mb-4 p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-lg text-rose-400 text-xs font-medium flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div>
+                {error}
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-3">
+              {/* Email Field */}
+              <div>
+                <label className="block mb-1.5 text-slate-300 text-xs font-medium">Email</label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="example@gmail.com"
+                    required
+                    className="w-full bg-white text-slate-900 rounded-lg px-3 py-2.5 pr-10 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all font-medium text-sm"
+                  />
+                  <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <label className="block mb-1.5 text-slate-300 text-xs font-medium">Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full bg-white text-slate-900 rounded-lg px-3 py-2.5 pr-10 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all font-medium text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-4 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white font-bold py-2.5 px-4 rounded-lg shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 transition-all duration-300 flex items-center justify-center gap-2 group disabled:opacity-50 text-sm"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Authenticating...
+                  </>
+                ) : (
+                  <>
+                    Sign in
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Footer Text */}
+            <p className="mt-4 text-center text-slate-500 text-[10px]">
+              Secured with AES-256 encryption & ISO-27001 compliance
+            </p>
           </div>
-
-          <div>
-            <label className="block mb-2 text-cyan-100/80 text-xs font-bold uppercase tracking-wider">Password Key</label>
-            <div className="relative">
-              <FaLock className="absolute left-4 top-3.5 text-slate-500" />
-              <input
-                type="password"
-                className="input-cyber pl-10"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-
-          <button type="submit" className="btn-luminous w-full">
-            Login Session
-          </button>
         </div>
+      </div>
 
-        <div className="mt-8 text-center border-t border-white/5 pt-6">
-          <p className="text-slate-400 text-sm">New Personnel? <Link to="/signup" className="text-cyan-400 hover:text-cyan-300 font-semibold transition-colors">Register ID</Link></p>
-        </div>
-      </form>
+      {/* ===== RIGHT SIDE - Video Panel (Desktop Only) ===== */}
+      <div className="hidden lg:block lg:w-[55%] relative overflow-hidden">
+        <video autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover">
+          <source src="/Signin_Precise_Proteus.mp4" type="video/mp4" />
+        </video>
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-transparent to-transparent opacity-80"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/30 via-transparent to-slate-900/30"></div>
+        <div className="absolute inset-0 bg-slate-900/20"></div>
+        <div className="absolute top-6 right-6 w-24 h-24 border-t-2 border-r-2 border-cyan-500/30 rounded-tr-2xl"></div>
+        <div className="absolute bottom-6 left-6 w-24 h-24 border-b-2 border-l-2 border-cyan-500/30 rounded-bl-2xl"></div>
+      </div>
+
+      <div className="hidden lg:block absolute left-[45%] top-0 bottom-0 w-6 bg-gradient-to-r from-slate-900 to-transparent z-20 rounded-r-2xl"></div>
     </div>
   );
 }
