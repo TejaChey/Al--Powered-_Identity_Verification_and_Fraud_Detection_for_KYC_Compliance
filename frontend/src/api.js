@@ -120,3 +120,38 @@ export async function addLog(payload) {
   });
   return await res.json();
 }
+
+
+// --- Audit Trail Report Download (Admin Only) ---
+export async function downloadAuditTrailReport(token) {
+  const res = await fetch(`${API_URL}/compliance/audit-trail/report`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || "Failed to download audit trail report");
+  }
+
+  // Get the blob and trigger download
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+
+  // Get filename from Content-Disposition header or use default
+  const disposition = res.headers.get("Content-Disposition");
+  let filename = "audit_trail_report.pdf";
+  if (disposition && disposition.includes("filename=")) {
+    filename = disposition.split("filename=")[1].replace(/"/g, "");
+  }
+
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+
+  return { success: true, filename };
+}

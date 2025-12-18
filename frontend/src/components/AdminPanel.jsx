@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { getAlerts, getLogs, addLog, dismissAlert, getSubmissions, setDocumentDecision } from "../api";
-import { Eye, BarChart3, Users, FileText, CheckCircle, XCircle, Clock, X, ChevronRight, AlertTriangle, Shield, ShieldCheck, RefreshCw, Inbox, Search, Clipboard, ScrollText, Mail, Check } from "lucide-react";
+import { getAlerts, getLogs, addLog, dismissAlert, getSubmissions, setDocumentDecision, downloadAuditTrailReport } from "../api";
+import { Eye, BarChart3, Users, FileText, CheckCircle, XCircle, Clock, X, ChevronRight, AlertTriangle, Shield, ShieldCheck, RefreshCw, Inbox, Search, Clipboard, ScrollText, Mail, Check, Download } from "lucide-react";
 import FraudExplanation from "./FraudExplanation";
 import { useToast } from "../contexts/ToastContext";
 
@@ -53,6 +53,7 @@ export default function AdminPanel() {
   const [expandedUsers, setExpandedUsers] = useState({});
   const [activeTab, setActiveTab] = useState('submissions');
   const [highlightedUser, setHighlightedUser] = useState(null); // Track user to highlight from alert
+  const [downloadingReport, setDownloadingReport] = useState(false); // Track PDF download
 
   // Group submissions by userEmail
   const groupedSubmissions = submissions.reduce((acc, sub) => {
@@ -174,6 +175,26 @@ export default function AdminPanel() {
       showToast('Document rejected', 'info');
     } catch (err) { console.error(err); showToast('Failed to reject', 'error'); }
   }
+
+  // Download Audit Trail Report as PDF
+  const handleDownloadAuditReport = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      showToast('Please login to download report', 'error');
+      return;
+    }
+
+    setDownloadingReport(true);
+    try {
+      const result = await downloadAuditTrailReport(token);
+      showToast(`Report downloaded: ${result.filename}`, 'success');
+    } catch (err) {
+      console.error('Download error:', err);
+      showToast(err.message || 'Failed to download report', 'error');
+    } finally {
+      setDownloadingReport(false);
+    }
+  };
 
   // Compute fraud risk badge color/text
   const fraudBadge = (score) => {
@@ -469,10 +490,36 @@ export default function AdminPanel() {
       {activeTab === 'audit' && (
         <div className="animate-tech-enter">
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-            <h3 className="text-purple-400 font-bold mb-4 flex items-center gap-2">
-              <ScrollText className="w-5 h-5" /> Audit Trail
-              <span className="px-2 py-0.5 bg-purple-500/20 text-purple-300 text-xs rounded-full">{logs.length} entries</span>
-            </h3>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <h3 className="text-purple-400 font-bold flex items-center gap-2">
+                <ScrollText className="w-5 h-5" /> Audit Trail
+                <span className="px-2 py-0.5 bg-purple-500/20 text-purple-300 text-xs rounded-full">{logs.length} entries</span>
+              </h3>
+
+              {/* Download Report Button */}
+              <button
+                onClick={handleDownloadAuditReport}
+                disabled={downloadingReport || logs.length === 0}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all duration-300 ${downloadingReport
+                    ? 'bg-purple-500/20 text-purple-400 cursor-wait'
+                    : logs.length === 0
+                      ? 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 text-purple-300 hover:from-purple-500/50 hover:to-pink-500/50 hover:shadow-lg hover:shadow-purple-500/20 border border-purple-500/30 hover:scale-105'
+                  }`}
+              >
+                {downloadingReport ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Download PDF Report
+                  </>
+                )}
+              </button>
+            </div>
             {logs.length === 0 ? (
               <div className="text-slate-500 text-sm text-center py-12 font-mono">
                 <FileText className="w-12 h-12 mx-auto mb-2 text-slate-600" />

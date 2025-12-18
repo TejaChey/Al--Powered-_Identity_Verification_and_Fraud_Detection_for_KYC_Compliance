@@ -265,62 +265,86 @@ function Dashboard() {
     setMultiFiles(merged);
 
     // ===========================================
-    // Real-time OCR using EasyOCR backend API (more accurate for Indian docs)
+    // Real-time OCR for ALL uploaded files (not just the first one)
     // ===========================================
-    const firstFile = newItems[0]?.file;
-    if (firstFile && firstFile.type.startsWith("image/")) {
-      try {
-        setOcrRunning(true);
-        setOcrProgress(10);
-        setOcrPreviewData(null);
+    const imageFiles = newItems.filter(item => item.file.type.startsWith("image/"));
 
-        const startTime = Date.now();
+    if (imageFiles.length > 0) {
+      setOcrRunning(true);
+      setOcrProgress(5);
 
-        // Create FormData and send to backend EasyOCR endpoint
-        const formData = new FormData();
-        formData.append("file", firstFile);
+      const startTime = Date.now();
+      const totalFiles = imageFiles.length;
+      let processedCount = 0;
 
-        setOcrProgress(30);
+      setMessage(`📄 Processing ${totalFiles} document(s)...`);
 
-        const response = await fetch("/ocr/preview", {
-          method: "POST",
-          body: formData,
-        });
+      // Process each file sequentially and store OCR result in each item
+      for (const item of imageFiles) {
+        try {
+          const formData = new FormData();
+          formData.append("file", item.file);
 
-        setOcrProgress(80);
+          setMessage(`📄 OCR: ${item.file.name} (${processedCount + 1}/${totalFiles})`);
 
-        if (!response.ok) {
-          throw new Error("OCR preview failed");
+          const response = await fetch("/ocr/preview", {
+            method: "POST",
+            body: formData,
+          });
+
+          processedCount++;
+          setOcrProgress(Math.round((processedCount / totalFiles) * 95) + 5);
+
+          if (response.ok) {
+            const ocrResult = await response.json();
+
+            // Store OCR result in this specific file's item
+            // Include BOTH masked and unmasked versions for flexibility
+            setMultiFiles(prev => prev.map(f =>
+              f.file.name === item.file.name && f.file.size === item.file.size
+                ? {
+                  ...f,
+                  ocrResult: {
+                    name: ocrResult.name,
+                    // Unmasked values (for OCR preview)
+                    aadhaarNumber: ocrResult.aadhaarNumber,
+                    panNumber: ocrResult.panNumber,
+                    dlNumber: ocrResult.dlNumber,
+                    // Masked values (kept for compatibility)
+                    maskedAadhaar: ocrResult.maskedAadhaar,
+                    maskedPan: ocrResult.maskedPan,
+                    maskedDl: ocrResult.maskedDl,
+                    dob: ocrResult.dob,
+                    gender: ocrResult.gender,
+                    documentType: ocrResult.documentType,
+                    rawText: ocrResult.rawText,
+                  }
+                }
+                : f
+            ));
+          } else {
+            console.warn(`OCR failed for ${item.file.name}`);
+            // Mark as failed
+            setMultiFiles(prev => prev.map(f =>
+              f.file.name === item.file.name && f.file.size === item.file.size
+                ? { ...f, ocrResult: { error: "OCR failed" } }
+                : f
+            ));
+          }
+        } catch (err) {
+          console.error(`OCR error for ${item.file.name}:`, err);
+          setMultiFiles(prev => prev.map(f =>
+            f.file.name === item.file.name && f.file.size === item.file.size
+              ? { ...f, ocrResult: { error: err.message } }
+              : f
+          ));
         }
-
-        const ocrResult = await response.json();
-        const processingTime = Date.now() - startTime;
-
-        setOcrProgress(100);
-
-        // Set preview data for OCRPreview component
-        setOcrPreviewData({
-          name: ocrResult.name,
-          aadhaar: ocrResult.maskedAadhaar,
-          maskedAadhaar: ocrResult.maskedAadhaar,
-          pan: ocrResult.maskedPan,
-          maskedPan: ocrResult.maskedPan,
-          maskedDl: ocrResult.maskedDl,
-          dob: ocrResult.dob,
-          gender: ocrResult.gender,
-          rawText: ocrResult.rawText,
-          documentType: ocrResult.documentType,
-          processingTimeMs: processingTime,
-          source: "easyocr-server",
-        });
-
-        setOcrRunning(false);
-        setMessage(`✨ OCR Preview ready in ${processingTime}ms (EasyOCR)`);
-      } catch (err) {
-        console.error("Server OCR preview error:", err);
-        setOcrRunning(false);
-        setMessage("⚠️ OCR preview failed - will try again on upload");
       }
+
+      const processingTime = Date.now() - startTime;
+      setOcrProgress(100);
+      setOcrRunning(false);
+      setMessage(`✨ OCR completed for ${processedCount} document(s) in ${processingTime}ms`);
     }
   };
 
@@ -395,38 +419,58 @@ function Dashboard() {
         })
       );
 
-      // pick first successful server result to show in preview area
-      const firstSuccess = (body.files || []).find((f) => f.success && f.result);
-      if (firstSuccess) {
-        const parsed = firstSuccess.result;
-        const verification = parsed.verification || {};
-        const parsedData = verification.parsed || parsed.parsed || {};
+      // Build verification results for ALL successful uploads
+      const allSuccessful = (body.files || []).filter((f) => f.success && f.result);
 
-        // Build full verification result with all data
-        const fullResult = {
-          submissionId: parsed.docId || parsed.submissionId || null,
-          documentType: parsedData.documentType ||
-            (parsedData.aadhaarNumber ? "Aadhaar" : parsedData.panNumber ? "PAN" : parsedData.dlNumber ? "DrivingLicence" : "Unknown"),
-          verified: parsed.decision === "Pass" || false,
-          tampered: parsed.fraud?.details?.manipulation_suspected || false,
-          maskedAadhaar: verification.maskedAadhaar || parsed.maskedAadhaar || null,
-          maskedPan: verification.maskedPan || parsed.maskedPan || null,
-          maskedDl: verification.maskedDl || parsed.maskedDl || null,
-          timestamp: new Date().toISOString(),
-          fraud: {
-            score: Math.round((parsed.fraud && parsed.fraud.score) || 0),
-            reasons: parsed.fraud?.reasons || [],
-            details: parsed.fraud?.details || {}
-          },
-          // Include full parsed data for VerificationCard
-          parsed: parsedData,
-          verification: verification,
-          rawText: verification.rawText || parsed.rawText || "",
-        };
+      if (allSuccessful.length > 0) {
+        // Build verification results array for all documents
+        const allResults = allSuccessful.map((item) => {
+          const parsed = item.result;
+          const verification = parsed.verification || {};
+          const parsedData = verification.parsed || parsed.parsed || {};
 
-        console.log("📊 Setting verificationResult:", fullResult);
-        setVerificationResult(fullResult);
-        setSubmissionsList((p) => [fullResult, ...p].filter(Boolean));
+          return {
+            filename: item.filename,
+            submissionId: parsed.docId || parsed.submissionId || null,
+            documentType: parsedData.documentType ||
+              (parsedData.aadhaarNumber ? "Aadhaar" : parsedData.panNumber ? "PAN" : parsedData.dlNumber ? "DrivingLicence" : "Unknown"),
+            verified: parsed.decision === "Pass" || false,
+            tampered: parsed.fraud?.details?.manipulation_suspected || false,
+            maskedAadhaar: verification.maskedAadhaar || parsed.maskedAadhaar || null,
+            maskedPan: verification.maskedPan || parsed.maskedPan || null,
+            maskedDl: verification.maskedDl || parsed.maskedDl || null,
+            timestamp: new Date().toISOString(),
+            fraud: {
+              score: Math.round((parsed.fraud && parsed.fraud.score) || 0),
+              reasons: parsed.fraud?.reasons || [],
+              details: parsed.fraud?.details || {}
+            },
+            parsed: parsedData,
+            verification: verification,
+            rawText: verification.rawText || parsed.rawText || "",
+          };
+        });
+
+        console.log(`📊 Setting ${allResults.length} verification results:`, allResults);
+
+        // Store ALL results as an array for multi-document display
+        // If single document, store as object for backwards compatibility
+        if (allResults.length === 1) {
+          setVerificationResult(allResults[0]);
+        } else {
+          // Store as array with isMultiple flag
+          setVerificationResult({
+            isMultiple: true,
+            documents: allResults,
+            // Also provide combined stats
+            totalDocuments: allResults.length,
+            verifiedCount: allResults.filter(r => r.verified).length,
+            highRiskCount: allResults.filter(r => r.fraud?.score >= 70).length,
+          });
+        }
+
+        // Add all results to submissions list
+        setSubmissionsList((p) => [...allResults, ...p].filter(Boolean));
       }
 
       fetchDocuments(token);
@@ -669,13 +713,33 @@ function Dashboard() {
                   </div>
 
                   <div className="mt-3 flex gap-2">
-                    <button
-                      onClick={() => uploadAllMultiFiles({ force: forceUpload })}
-                      disabled={multiUploading || multiFiles.length === 0 || (getPoorFiles().length > 0 && !forceUpload)}
-                      className="btn-luminous flex-1"
-                    >
-                      {multiUploading ? "UPLOADING..." : "UPLOAD & PARSE"}
-                    </button>
+                    <div className="flex-1 relative">
+                      <button
+                        onClick={() => uploadAllMultiFiles({ force: forceUpload })}
+                        disabled={multiUploading || multiFiles.length === 0 || (getPoorFiles().length > 0 && !forceUpload) || ocrRunning}
+                        className={`btn-luminous w-full relative overflow-hidden ${multiUploading ? 'opacity-80' : ''}`}
+                      >
+                        {multiUploading ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            UPLOADING...
+                          </span>
+                        ) : ocrRunning ? "OCR IN PROGRESS..." : "UPLOAD & PARSE"}
+
+                        {/* Progress bar overlay at bottom of button */}
+                        {multiUploading && (
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/30">
+                            <div
+                              className="h-full bg-white/50 transition-all duration-300"
+                              style={{ width: `${multiFiles.filter(f => f.status === 'success').length / multiFiles.length * 100}%` }}
+                            />
+                          </div>
+                        )}
+                      </button>
+                    </div>
                     <button onClick={() => { multiFiles.forEach((m) => URL.revokeObjectURL(m.url)); setMultiFiles([]); setForceUpload(false); }} className="px-3 py-2 rounded-md bg-white/5">Clear All</button>
                   </div>
                 </div>
@@ -686,119 +750,251 @@ function Dashboard() {
 
             {/* RIGHT: preview, OCR, charts */}
             <div className="w-full lg:w-2/3 space-y-6">
-              {loading && (
+              {/* Show ScanningLoader ONLY during upload (not during OCR preview) */}
+              {multiUploading && (
                 <div className="glass-panel p-12 flex justify-center">
                   <ScanningLoader />
                 </div>
               )}
 
-              {!loading && !verificationResult && !ocrPreviewData && !ocrRunning && (
+              {!loading && !verificationResult && !ocrRunning && !multiFiles.some(f => f.ocrResult) && multiFiles.length === 0 && (
                 <div className="h-[400px] border border-white/10 bg-slate-900/30 rounded-3xl flex items-center justify-center text-slate-500 animate-pulse">
                   <Activity className="w-16 h-16 opacity-20" />
                 </div>
               )}
 
-              {/* Real-time OCR Preview (shows immediately when files are selected) */}
-              {(ocrRunning || ocrPreviewData) && !verificationResult && (
+              {/* Real-time OCR Preview - Shows a card for EACH file (hide during upload) */}
+              {(ocrRunning || multiFiles.some(f => f.ocrResult)) && !verificationResult && !multiUploading && (
                 <div className="space-y-6">
-                  <div className="glass-panel p-6 border-2 border-purple-500/30">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-600/20 border border-purple-400/30">
-                        <Eye className="w-6 h-6 text-purple-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-white">Real-Time OCR Preview</h3>
-                        <p className="text-xs text-purple-300">Powered by EasyOCR (Hindi + English)</p>
-                      </div>
-                      {ocrPreviewData?.processingTimeMs && (
-                        <div className="ml-auto bg-purple-500/20 px-3 py-1 rounded-full text-xs text-purple-300">
-                          ⚡ {ocrPreviewData.processingTimeMs}ms
+                  {/* Progress indicator while OCR is running */}
+                  {ocrRunning && (
+                    <div className="glass-panel p-6 border-2 border-purple-500/30">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-600/20 border border-purple-400/30">
+                          <Eye className="w-6 h-6 text-purple-400 animate-pulse" />
                         </div>
-                      )}
-                    </div>
-
-                    {ocrRunning && (
+                        <div>
+                          <h3 className="text-lg font-bold text-white">Processing Documents...</h3>
+                          <p className="text-xs text-purple-300">Extracting text via EasyOCR</p>
+                        </div>
+                      </div>
                       <div className="mb-4">
-                        <div className="text-xs text-slate-400 mb-1">Scanning document... {ocrProgress}%</div>
+                        <div className="text-xs text-slate-400 mb-1">Scanning documents... {ocrProgress}%</div>
                         <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-white/5">
                           <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all" style={{ width: `${Math.min(ocrProgress, 100)}%` }} />
                         </div>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {ocrPreviewData && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
-                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</div>
-                          <div className="text-white font-medium">{ocrPreviewData.name || "Not detected"}</div>
-                        </div>
-                        <div className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
-                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Document Type</div>
-                          <div className="text-cyan-300 font-mono">{ocrPreviewData.documentType || "Unknown"}</div>
-                        </div>
-                        <div className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
-                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Aadhaar Number</div>
-                          <div className="text-cyan-300 font-mono tracking-widest">{ocrPreviewData.maskedAadhaar || "N/A"}</div>
-                        </div>
-                        <div className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
-                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">PAN Number</div>
-                          <div className="text-cyan-300 font-mono tracking-widest">{ocrPreviewData.maskedPan || "N/A"}</div>
-                        </div>
-                        {ocrPreviewData.dob && (
-                          <div className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
-                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Date of Birth</div>
-                            <div className="text-white font-mono">{ocrPreviewData.dob}</div>
-                          </div>
-                        )}
-                        {ocrPreviewData.gender && (
-                          <div className="bg-slate-900/50 p-4 rounded-lg border border-white/5">
-                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Gender</div>
-                            <div className="text-white font-mono">{ocrPreviewData.gender}</div>
-                          </div>
-                        )}
+                  {/* Individual OCR Preview Cards for each file */}
+                  {multiFiles.filter(f => f.ocrResult && !f.ocrResult.error).length > 0 && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-lg font-bold text-white">OCR Preview</h3>
+                        <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-full">
+                          {multiFiles.filter(f => f.ocrResult && !f.ocrResult.error).length} document(s)
+                        </span>
                       </div>
-                    )}
 
-                    {ocrPreviewData?.rawText && (
-                      <div className="mt-4">
-                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Raw OCR Text</div>
-                        <div className="bg-[#020617] text-green-400 p-4 rounded-xl border border-white/10 font-mono text-xs overflow-x-auto shadow-inner max-h-32 overflow-y-auto">
-                          <p className="opacity-80 whitespace-pre-wrap">{ocrPreviewData.rawText.slice(0, 1000)}</p>
-                        </div>
+                      <div className="grid grid-cols-1 gap-4">
+                        {multiFiles.filter(f => f.ocrResult && !f.ocrResult.error).map((fileItem, idx) => {
+                          const ocr = fileItem.ocrResult;
+                          const docType = ocr.documentType || "Unknown";
+                          const isAadhaar = docType.toLowerCase().includes("aadhaar");
+                          const isPan = docType.toLowerCase().includes("pan");
+                          const isDL = docType.toLowerCase().includes("driv") || docType.toLowerCase().includes("license");
+
+                          // Get badge colors based on document type
+                          const badgeColors = isAadhaar
+                            ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
+                            : isPan
+                              ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                              : isDL
+                                ? "bg-purple-500/20 text-purple-300 border-purple-500/30"
+                                : "bg-slate-500/20 text-slate-300 border-slate-500/30";
+
+                          return (
+                            <div key={idx} className="glass-panel p-5 border border-white/10 hover:border-purple-500/30 transition-all">
+                              {/* Header with filename and document type */}
+                              <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-800">
+                                    {fileItem.file.type.startsWith("image/") && (
+                                      <img src={fileItem.url} alt="" className="w-full h-full object-cover" />
+                                    )}
+                                  </div>
+                                  <div>
+                                    <div className="text-sm font-bold text-white truncate max-w-[200px]">{fileItem.file.name}</div>
+                                    <div className="text-[10px] text-slate-400">{(fileItem.file.size / 1024).toFixed(0)} KB</div>
+                                  </div>
+                                </div>
+                                <span className={`px-3 py-1 rounded-full text-xs font-bold border ${badgeColors}`}>
+                                  {isAadhaar ? "AADHAAR" : isPan ? "PAN CARD" : isDL ? "DRIVING LICENSE" : docType.toUpperCase()}
+                                </span>
+                              </div>
+
+                              {/* Extracted data grid */}
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <div className="bg-slate-900/50 p-3 rounded-lg border border-white/5">
+                                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</div>
+                                  <div className="text-white font-medium text-sm">{ocr.name || "Not detected"}</div>
+                                </div>
+
+                                {(isAadhaar || ocr.aadhaarNumber || ocr.maskedAadhaar) && (
+                                  <div className="bg-slate-900/50 p-3 rounded-lg border border-white/5">
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Aadhaar</div>
+                                    <div className="text-cyan-300 font-mono text-sm tracking-wider">{ocr.aadhaarNumber || ocr.maskedAadhaar || "N/A"}</div>
+                                  </div>
+                                )}
+
+                                {(isPan || ocr.panNumber || ocr.maskedPan) && (
+                                  <div className="bg-slate-900/50 p-3 rounded-lg border border-white/5">
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">PAN</div>
+                                    <div className="text-amber-300 font-mono text-sm tracking-wider">{ocr.panNumber || ocr.maskedPan || "N/A"}</div>
+                                  </div>
+                                )}
+
+                                {(isDL || ocr.dlNumber || ocr.maskedDl) && (
+                                  <div className="bg-slate-900/50 p-3 rounded-lg border border-white/5">
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">DL Number</div>
+                                    <div className="text-purple-300 font-mono text-sm tracking-wider">{ocr.dlNumber || ocr.maskedDl || "N/A"}</div>
+                                  </div>
+                                )}
+
+                                {ocr.dob && (
+                                  <div className="bg-slate-900/50 p-3 rounded-lg border border-white/5">
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">DOB</div>
+                                    <div className="text-white font-mono text-sm">{ocr.dob}</div>
+                                  </div>
+                                )}
+
+                                {ocr.gender && (
+                                  <div className="bg-slate-900/50 p-3 rounded-lg border border-white/5">
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Gender</div>
+                                    <div className="text-white font-mono text-sm">{ocr.gender}</div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Raw text preview (collapsed by default) */}
+                              {ocr.rawText && (
+                                <details className="mt-3">
+                                  <summary className="text-[10px] font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:text-slate-300">
+                                    Raw OCR Text
+                                  </summary>
+                                  <div className="mt-2 bg-[#020617] text-green-400 p-3 rounded-lg border border-white/10 font-mono text-[10px] max-h-24 overflow-y-auto">
+                                    {ocr.rawText.slice(0, 500)}...
+                                  </div>
+                                </details>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   <p className="text-xs text-slate-400 text-center">
-                    ℹ️ This is a client-side preview. Click "UPLOAD & PARSE" for full server-side verification with fraud detection.
+                    ℹ️ This is a preview. Click "UPLOAD & PARSE" for full server-side verification with fraud detection.
                   </p>
                 </div>
               )}
 
               {verificationResult && (
                 <div className="space-y-6">
-                  <VerificationCard result={verificationResult} />
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <OCRPreview
-                      ocr={{
-                        name: verificationResult.parsed?.name || null,
-                        aadhaar: verificationResult.maskedAadhaar || null,
-                        maskedAadhaar: verificationResult.maskedAadhaar || null,
-                        pan: verificationResult.maskedPan || null,
-                        maskedPan: verificationResult.maskedPan || null,
-                        dlNumber: verificationResult.maskedDl || verificationResult.parsed?.dlNumber || null,
-                        maskedDl: verificationResult.maskedDl || verificationResult.parsed?.dlNumber || null,
-                        rawText: verificationResult.rawText || "",
-                      }}
-                      progress={0}
-                      running={false}
-                      quality={imageQuality}
-                    />
-                    <div className="glass-panel p-6">
-                      <h4 className="text-xs text-white uppercase font-mono mb-4">Visual Metrics</h4>
-                      <DashboardCharts submissions={[...submissionsList, ...docs]} />
-                    </div>
-                  </div>
+                  {/* Handle multiple documents */}
+                  {verificationResult.isMultiple ? (
+                    <>
+                      {/* Summary header for multiple docs */}
+                      <div className="glass-panel p-4 border-2 border-purple-500/30">
+                        <div className="flex items-center justify-between flex-wrap gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-600/20 border border-purple-400/30">
+                              <Eye className="w-6 h-6 text-purple-400" />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-bold text-white">Verification Complete</h3>
+                              <p className="text-xs text-purple-300">{verificationResult.totalDocuments} documents processed</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-3">
+                            <div className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs">
+                              ✓ {verificationResult.verifiedCount} Verified
+                            </div>
+                            {verificationResult.highRiskCount > 0 && (
+                              <div className="px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 text-xs animate-pulse">
+                                ⚠ {verificationResult.highRiskCount} High Risk
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Individual cards for each document */}
+                      {verificationResult.documents.map((docResult, idx) => (
+                        <div key={idx} className="space-y-4">
+                          <div className="flex items-center gap-2 text-sm text-slate-300">
+                            <span className="px-2 py-0.5 bg-slate-700 rounded text-xs font-mono">
+                              Document {idx + 1}/{verificationResult.totalDocuments}
+                            </span>
+                            <span className="text-slate-500">|</span>
+                            <span className="font-medium">{docResult.filename}</span>
+                          </div>
+                          <VerificationCard result={docResult} />
+                          <div className="grid md:grid-cols-2 gap-6">
+                            <OCRPreview
+                              ocr={{
+                                name: docResult.parsed?.name || null,
+                                aadhaar: docResult.maskedAadhaar || null,
+                                maskedAadhaar: docResult.maskedAadhaar || null,
+                                pan: docResult.maskedPan || null,
+                                maskedPan: docResult.maskedPan || null,
+                                dlNumber: docResult.maskedDl || docResult.parsed?.dlNumber || null,
+                                maskedDl: docResult.maskedDl || docResult.parsed?.dlNumber || null,
+                                rawText: docResult.rawText || "",
+                              }}
+                              progress={0}
+                              running={false}
+                              quality={imageQuality}
+                            />
+                            {idx === verificationResult.documents.length - 1 && (
+                              <div className="glass-panel p-6">
+                                <h4 className="text-xs text-white uppercase font-mono mb-4">Visual Metrics</h4>
+                                <DashboardCharts submissions={[...submissionsList, ...docs]} />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    /* Single document - original behavior */
+                    <>
+                      <VerificationCard result={verificationResult} />
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <OCRPreview
+                          ocr={{
+                            name: verificationResult.parsed?.name || null,
+                            aadhaar: verificationResult.maskedAadhaar || null,
+                            maskedAadhaar: verificationResult.maskedAadhaar || null,
+                            pan: verificationResult.maskedPan || null,
+                            maskedPan: verificationResult.maskedPan || null,
+                            dlNumber: verificationResult.maskedDl || verificationResult.parsed?.dlNumber || null,
+                            maskedDl: verificationResult.maskedDl || verificationResult.parsed?.dlNumber || null,
+                            rawText: verificationResult.rawText || "",
+                          }}
+                          progress={0}
+                          running={false}
+                          quality={imageQuality}
+                        />
+                        <div className="glass-panel p-6">
+                          <h4 className="text-xs text-white uppercase font-mono mb-4">Visual Metrics</h4>
+                          <DashboardCharts submissions={[...submissionsList, ...docs]} />
+                        </div>
+                      </div>
+                    </>
+                  )}
                   {/* Device Fingerprint Display */}
                   <DeviceFingerprint compact={false} />
                 </div>
