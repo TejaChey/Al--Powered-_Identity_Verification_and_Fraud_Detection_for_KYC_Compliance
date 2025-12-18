@@ -594,12 +594,12 @@ function Dashboard() {
 
           <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
             <button onClick={() => setActiveTab("home")} className={`px-4 py-2 rounded-lg text-xs uppercase tracking-wider transition-all ${activeTab === "home" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 scale-105" : "text-slate-400 hover:text-white hover:bg-white/10"}`}><Activity className="w-4 h-4 inline-block mr-1" />Home</button>
-            <button onClick={() => setActiveTab("bulk")} className={`px-4 py-2 rounded-lg text-xs uppercase tracking-wider transition-all ${activeTab === "bulk" ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 scale-105" : "text-slate-400 hover:text-white hover:bg-white/10"}`}><FileSpreadsheet className="w-4 h-4 inline-block mr-1" />Bulk</button>
             <button onClick={() => setActiveTab("submissions")} className={`px-4 py-2 rounded-lg text-xs uppercase tracking-wider transition-all ${activeTab === "submissions" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 scale-105" : "text-slate-400 hover:text-white hover:bg-white/10"}`}>Submissions</button>
 
             {/* Admin-only tabs */}
             {userRole === "admin" && (
               <>
+                <button onClick={() => setActiveTab("bulk")} className={`px-4 py-2 rounded-lg text-xs uppercase tracking-wider transition-all ${activeTab === "bulk" ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 scale-105" : "text-slate-400 hover:text-white hover:bg-white/10"}`}><FileSpreadsheet className="w-4 h-4 inline-block mr-1" />Bulk</button>
                 <button onClick={() => setActiveTab("monitoring")} className={`px-4 py-2 rounded-lg text-xs uppercase tracking-wider transition-all ${activeTab === "monitoring" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 scale-105" : "text-slate-400 hover:text-white hover:bg-white/10"}`}><BarChart3 className="w-4 h-4 inline-block mr-1" />Monitor</button>
                 <button onClick={() => setActiveTab("admin")} className={`px-4 py-2 rounded-lg text-xs uppercase tracking-wider transition-all flex items-center gap-1 ${activeTab === "admin" ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 scale-105" : "text-slate-400 hover:text-white hover:bg-white/10"}`}><Shield className="w-4 h-4" /> Admin</button>
               </>
